@@ -19,6 +19,49 @@ The Android SDK for the Cogs real-time message brokering system.
 
 You can read the complete documentation [here](https://cogswell.io/docs/android/client-sdk/api/)
 
+## [Code Samples](#code-samples)
+You will see the name Gambit throughout our code samples. This was the code name used for Cogs prior to release.
+
+### Preparation for using the Android Client SDK
+```java
+import io.cogswell.sdk.GambitSDKService;
+
+// Hex encoded access-key from one of your api keys in the Web UI.
+String accessKey;
+
+// Hex encoded client salt/secret pair acquired from /client_secret endpoint and
+// associated with above access-key.
+String clientSalt;
+String clientSecret;
+
+// Create and setup the Cogs SDK service
+GambitSDKService cogsService = GambitSDKService.getInstance();
+```
+
+### POST /event
+This API route is used to send an event to Cogs.
+```java
+
+```
+
+### GET /register_push
+This API route is used to register an application for Cogs push notifications.
+```java
+
+```
+
+### DELETE /unregister_push
+This API route is used to unregister an application from Cogs push notifications.
+```java
+
+```
+
+### GET /message/{token}
+This API route is used to fetch message content for a Cogs push notification.
+```java
+
+```
+
 ## Publishing
 
 In order to publish to jcenter, you will need to create a new local.properties file in the root of the project repository, and populate the `user` and `apiKey` fields with the jcenter login credentials.
