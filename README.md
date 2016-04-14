@@ -1,3 +1,5 @@
+[ ![Download](https://api.bintray.com/packages/cogswell-io/maven/cogs-android-client-sdk/images/download.svg)](https://bintray.com/cogswell-io/maven/cogs-android-client-sdk/_latestVersion)
+
 ## Description
 The Android SDK for the Cogs real-time message brokering system.
 
