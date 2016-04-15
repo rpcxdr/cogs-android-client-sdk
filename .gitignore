@@ -1,0 +1,11 @@
+# Ignore IDE artifacts.
+/.project
+
+# Ignore the build artifacts directory
+/build
+
+# Ignore the custom gradle wrapper downloads
+/.gradle
+
+# Ignore the local.properties which contain credentials for publishing
+/local.properties
