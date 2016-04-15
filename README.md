@@ -64,7 +64,7 @@ GambitRequestEvent.Builder builder = new GambitRequestEvent.Builder(
   .setNamespace(namespace)
   .setAttributes(attributes)
   .setCampaignId(campaignId)
-  .setForwardAsMessage(true);
+  .setTimestamp(timestamp);
 
 Future<io.cogswell.sdk.GambitResponse> future = null;
 try {
@@ -90,9 +90,6 @@ ExecutorService executor;
 
 // The attributes whose names and types should match the namespace schema.
 LinkedHashMap<String, Object> attributes;
-
-// The device UDID
-String UDID;
 
 // The push notification environment
 // "dev" or "production"
@@ -138,9 +135,6 @@ ExecutorService executor;
 
 // The attributes whose names and types should match the namespace schema.
 LinkedHashMap<String, Object> attributes;
-
-// The device UDID
-String UDID;
 
 // The push notification environment
 // "dev" or "production"
