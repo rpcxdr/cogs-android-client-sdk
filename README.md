@@ -41,7 +41,45 @@ GambitSDKService cogsService = GambitSDKService.getInstance();
 ### POST /event
 This API route is used to send an event to Cogs.
 ```java
+// This should contain the current time in ISO-8601 format.
+String timestamp;
 
+// The name of the namespace for which the event is destined.
+String namespace
+
+// This will be sent along with messages so that you can identify the event which
+// "triggered" the message delivery.
+String eventName;
+
+// The optional ID of the campaign to which this event is responsing. This can
+// either be omitted or set to -1 for no campaign.
+Integer campaignId;
+
+// The attributes whose names and types should match the namespace schema.
+LinkedHashMap<String, Object> attributes;
+
+GambitRequestEvent.Builder builder = new GambitRequestEvent.Builder(
+  accessKey, clientSalt, clientSecret
+).setEventName(eventName)
+  .setNamespace(namespace)
+  .setAttributes(attributes)
+  .setCampaignId(campaignId)
+  .setForwardAsMessage(true);
+
+Future<io.cogswell.sdk.GambitResponse> future = null;
+try {
+  future = GambitSDKService.getInstance().sendGambitEvent(builder);
+} catch (Exception e) {
+  // Handle Exception
+}
+
+GambitResponseEvent response;
+try {
+  response = (GambitResponseEvent) future.get();
+  message = response.getMessage();
+} catch (InterruptedException | ExecutionException ex) {
+  // Handle Exception
+}
 ```
 
 ### GET /register_push
