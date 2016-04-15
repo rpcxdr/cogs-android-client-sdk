@@ -59,7 +59,28 @@ This API route is used to unregister an application from Cogs push notifications
 ### GET /message/{token}
 This API route is used to fetch message content for a Cogs push notification.
 ```java
+LinkedHashMap<String, Object> pkAttributes = new LinkedHashMap<>();
 
+pkAttributes.put({key}, {value});
+GambitRequestMessage.Builder builder = new GambitRequestMessage.Builder(
+  accessKey, clientSalt, clientSecret
+).setNamespace(namespaceName)
+  .setAttributes(pkAttributes)
+  .setUDID(UDID);
+
+Future<io.cogswell.sdk.GambitResponse> future = null;
+try {
+  future = executor.submit(builder.build());
+} catch (Exception e) {
+  ???
+}
+
+GambitResponseMessage response;
+try {
+  response = (GambitResponseMessage) future.get();
+} catch (InterruptedException | ExecutionException ex) {
+  ???
+}
 ```
 
 ## Publishing
