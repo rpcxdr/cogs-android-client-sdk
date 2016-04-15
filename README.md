@@ -47,7 +47,49 @@ This API route is used to send an event to Cogs.
 ### GET /register_push
 This API route is used to register an application for Cogs push notifications.
 ```java
+// An executor service
+ExecutorService executor;
 
+// The attributes whose names and types should match the namespace schema.
+LinkedHashMap<String, Object> attributes;
+
+// The device UDID
+String UDID;
+
+// The push notification environment
+// "dev" or "production"
+String environment;
+
+// GCM registration token
+// See https://developers.google.com/cloud-messaging/registration
+String UDID
+
+// Android ApplicationId
+String platform_app_id
+
+GambitRequestPush.Builder builder = new GambitRequestPush.Builder(
+  accessKey, clientSalt, clientSecret
+).setNamespace(namespaceName)
+  .setAttributes(attributes)
+  .setUDID(UDID)
+  .setEnviornment(environment)
+  .setPlatform("android")
+  .setPlatformAppID(platform_app_id)
+  .setMethodName(GambitRequestPush.register);
+
+Future<io.cogswell.sdk.GambitResponse> future = null;
+try {
+  future = executor.submit(builder.build());
+} catch (Exception e) {
+  // Handle Exception
+}
+
+GambitResponsePush response;
+try {
+  response = (GambitResponsePush) future.get();
+} catch (InterruptedException | ExecutionException ex) {
+  // Handle Exception
+}
 ```
 
 ### DELETE /unregister_push
@@ -59,27 +101,33 @@ This API route is used to unregister an application from Cogs push notifications
 ### GET /message/{token}
 This API route is used to fetch message content for a Cogs push notification.
 ```java
-LinkedHashMap<String, Object> pkAttributes = new LinkedHashMap<>();
+// An executor service
+ExecutorService executor;
 
-pkAttributes.put({key}, {value});
+// The attributes whose names and types should match the namespace schema.
+LinkedHashMap<String, Object> attributes;
+
+// The message id token returned by the notification
+String token;
+
 GambitRequestMessage.Builder builder = new GambitRequestMessage.Builder(
   accessKey, clientSalt, clientSecret
 ).setNamespace(namespaceName)
-  .setAttributes(pkAttributes)
-  .setUDID(UDID);
+  .setAttributes(attributes)
+  .setUDID(token);
 
 Future<io.cogswell.sdk.GambitResponse> future = null;
 try {
   future = executor.submit(builder.build());
 } catch (Exception e) {
-  ???
+  // Handle Exception
 }
 
 GambitResponseMessage response;
 try {
   response = (GambitResponseMessage) future.get();
 } catch (InterruptedException | ExecutionException ex) {
-  ???
+  // Handle Exception
 }
 ```
 
