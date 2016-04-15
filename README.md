@@ -95,7 +95,49 @@ try {
 ### DELETE /unregister_push
 This API route is used to unregister an application from Cogs push notifications.
 ```java
+// An executor service
+ExecutorService executor;
 
+// The attributes whose names and types should match the namespace schema.
+LinkedHashMap<String, Object> attributes;
+
+// The device UDID
+String UDID;
+
+// The push notification environment
+// "dev" or "production"
+String environment;
+
+// GCM registration token
+// See https://developers.google.com/cloud-messaging/registration
+String UDID
+
+// Android ApplicationId
+String platform_app_id
+
+GambitRequestPush.Builder builder = new GambitRequestPush.Builder(
+  accessKey, clientSalt, clientSecret
+).setNamespace(namespaceName)
+  .setAttributes(attributes)
+  .setUDID(UDID)
+  .setEnviornment(environment)
+  .setPlatform("android")
+  .setPlatformAppID(platform_app_id)
+  .setMethodName(GambitRequestPush.unregister);
+
+Future<io.cogswell.sdk.GambitResponse> future = null;
+try {
+  future = executor.submit(builder.build());
+} catch (Exception e) {
+  // Handle Exception
+}
+
+GambitResponsePush response;
+try {
+  response = (GambitResponsePush) future.get();
+} catch (InterruptedException | ExecutionException ex) {
+  // Handle Exception
+}
 ```
 
 ### GET /message/{token}
