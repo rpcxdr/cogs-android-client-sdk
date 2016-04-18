@@ -14,6 +14,7 @@ The Android SDK for the Cogs real-time message brokering system.
 * Once you have Android Studio installed, you will need to add the ANDROID_HOME environment variable to you profile, giving it the full path to your Android Studio intallation.
 * Now you can run either your locally installed gradle or the Gradle Wrapper script (gradlew on Linux and OS X; gradlew.bat on Windows) in order to assemble the SDK: `./gradlew install`
 * The .aar file is now installed in your local cache, and can be used for either the example app or your own Android app.
+* If you have access, you can publish to bintray using `BINTRAY_API_KEY=******** BINTRAY_USER=cogswell-io ./gradlew bintrayUpload`
 
 ## Usage
 
