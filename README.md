@@ -8,7 +8,7 @@ The Android SDK for the Cogs real-time message brokering system.
 * Android Studio 1.5.0
 * Requires GCM enabled application. You can read more about GCM [here](https://developers.google.com/cloud-messaging/)
 
-## Installation
+## [Installation] (#build-details)
 ### Manual
 * Follow the Android Studio installation instructions appropriate for your platform. http://developer.android.com/sdk/index.html (If you are on Ubuntu 15.04 or later, the only dependencies you need are lib32stdc++6 and lib32z1. Attempting to install some of the others will result in errors)
 * Once you have Android Studio installed, you will need to add the ANDROID_HOME environment variable to you profile, giving it the full path to your Android Studio intallation.
