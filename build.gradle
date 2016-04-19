@@ -17,7 +17,7 @@ apply plugin: 'com.jfrog.bintray'
 //apply plugin: 'maven-publish'
 
 // This is the version of this library used when deploying the artifact to jcenter
-version = '1.0.7'
+version = '1.0.9'
 group = 'io.cogswell'
 def siteUrl = 'https://cogswell.io/'
 def gitUrl = 'https://github.com/cogswell-io/cogs-android-client-sdk'
@@ -27,7 +27,7 @@ def packageName =  settingsProps.getProperty('rootProject.name').replaceAll("'",
 
 android {
   compileSdkVersion 22
-  buildToolsVersion "22.0.1"
+  buildToolsVersion "23.0.3"
 
   defaultConfig {
     minSdkVersion 15
