@@ -17,10 +17,13 @@ apply plugin: 'com.jfrog.bintray'
 //apply plugin: 'maven-publish'
 
 // This is the version of this library used when deploying the artifact to jcenter
-version = '1.0.5'
+version = '1.0.7'
 group = 'io.cogswell'
 def siteUrl = 'https://cogswell.io/'
 def gitUrl = 'https://github.com/cogswell-io/cogs-android-client-sdk'
+Properties settingsProps = new Properties()
+settingsProps.load(new File('settings.gradle').newDataInputStream())
+def packageName =  settingsProps.getProperty('rootProject.name').replaceAll("'","")
 
 android {
   compileSdkVersion 22
@@ -85,7 +88,7 @@ bintray {
   pkg {
     repo = 'maven'
     userOrg = user
-    name = group
+    name = packageName
     desc = 'Cogs Android Client SDK'
     websiteUrl = siteUrl
     vcsUrl = gitUrl
@@ -110,6 +113,7 @@ dependencies {
   compile 'org.json:json:20160212'
   compile 'com.google.android.gms:play-services:8.3.0'
   compile 'commons-codec:commons-codec:1.10'
+  compile group: 'commons-codec', name: 'commons-codec', version: '1.10'
 }
 
 task sourcesJar(type: Jar) {
