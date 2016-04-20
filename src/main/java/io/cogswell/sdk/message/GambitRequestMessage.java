@@ -50,7 +50,7 @@ public class GambitRequestMessage extends GambitRequest {
          * the supplied attributes must match those defined either within the
          * namespace, or defined as core attributes on the customer's account.
          */
-        protected LinkedHashMap<String, Object> mAttributes;
+        protected JSONObject mAttributes;
         /**
          * The namespace for with which this request is associated. The
          * attributes must either be defined for the specified namespace, or
@@ -87,7 +87,7 @@ public class GambitRequestMessage extends GambitRequest {
          * @param attributes
          * @return
          */
-        public Builder setAttributes(LinkedHashMap<String, Object> attributes) {
+        public Builder setAttributes(JSONObject attributes) {
             this.mAttributes = attributes;
 
             return this;
@@ -108,7 +108,7 @@ public class GambitRequestMessage extends GambitRequest {
          *
          * @return
          */
-        public LinkedHashMap<String, Object> getAttributes() {
+        public JSONObject getAttributes() {
             return mAttributes;
         }
 
@@ -248,8 +248,15 @@ public class GambitRequestMessage extends GambitRequest {
                 payload.put("namespace", builder.getNamespace());
             }
 
+            TimeZone tz = TimeZone.getTimeZone("UTC");
+            DateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mmZ");
+            df.setTimeZone(tz);
+            String timestamp = df.format(new Date());
+
+            payload.put("timestamp", timestamp);
+
             if (builder.getAttributes() != null) {
-                payload.put("attributes", new JSONObject(builder.getAttributes()));
+                payload.put("attributes", builder.getAttributes());
             }
         } catch (JSONException e) {
             e.printStackTrace();
