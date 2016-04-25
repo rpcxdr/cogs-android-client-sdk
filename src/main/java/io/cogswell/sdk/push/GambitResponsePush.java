@@ -13,7 +13,12 @@ import java.util.ArrayList;
 
 public class GambitResponsePush extends GambitResponse {
 
-    private String message;
+
+    /**
+     * Gambit API Event Response Message
+     */
+    protected String mMessage;
+
     /**
      * Construct the response object using the raw response body and response code
      * @param response The raw HTTP response body as text
@@ -22,16 +27,11 @@ public class GambitResponsePush extends GambitResponse {
     public GambitResponsePush(String response, int code) {
         super(response, code);
 
+        //Log.d("responseCode", String.valueOf(response));
         if (isSuccess()) {
             if (mJson.has("message")) {
                 try {
-                    message = mJson.getString("message");
-                } catch (JSONException e) {
-                    e.printStackTrace();
-                }
-            } else if (mJson.has("error_message")) {
-                try {
-                    message = mJson.getString("error_message");
+                    mMessage = mJson.getString("message");
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
@@ -42,10 +42,20 @@ public class GambitResponsePush extends GambitResponse {
                 mErrorCode = "UNKNOWN";
                 mErrorDetails = "Unknown response: "+response;
             }
+        } else if (mJson.has("error_message")) {
+            try {
+                mMessage = mJson.getString("error_message");
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
         }
     }
 
+    /**
+     * Get Gambit API Event Response Message
+     * @return A server message indicating the request status in human readable format
+     */
     public String getMessage() {
-        return message;
+        return mMessage;
     }
 }
