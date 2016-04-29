@@ -34,10 +34,33 @@ public abstract class GambitRequest implements Callable<GambitResponse> {
     /**
      * The base URL used to make API calls. This should be refactored so that it supports dev/prod environments and
      * easy, centralized environment switching.
+     *
+     * @param baseUrl the base URL of the API. All trailing slashes ('/') will be removed before use in routes.
      */
     public static void setBaseUrl(String baseUrl) {
-        mBaseUrl = baseUrl;
+        mBaseUrl = trimRight(baseUrl, '/');
     }
+
+    private static String trimRight(String text, int character) {
+        if (text == null)
+            return null;
+
+        int trimOffset = -1;
+        for (int i = text.length() - 1; i >= 0; i--) {
+            if (text.codePointAt(i) == character)
+                trimOffset = i;
+            else
+                i = -1;
+        }
+
+        if (trimOffset < 0)
+            return text;
+        else if (trimOffset == 0)
+            return "";
+        else
+            return text.substring(0, trimOffset);
+    } 
+
     public GambitRequest() {
         
     }
