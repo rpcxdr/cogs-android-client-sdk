@@ -179,7 +179,7 @@ public class GambitRequestMessage extends GambitRequest {
         }
     }
 
-    public static final String url = "message/%s";
+    public static final String pathFormat = "/message/%s";
     /**
      * Generated request body
      */
@@ -298,8 +298,7 @@ public class GambitRequestMessage extends GambitRequest {
         StringBuilder builder = new StringBuilder();
 
         builder.append(getBaseUrl());
-
-        builder.append(String.format(url, mUDID));
+        builder.append(String.format(pathFormat, mUDID));
 
         URL url = null;
 

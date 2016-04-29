@@ -340,7 +340,7 @@ public class GambitRequestEvent extends GambitRequest {
         }
     }
 
-    protected static final String endpoint = "event";
+    protected static final String endpoint = "/event";
 
     /**
      * Generated request body

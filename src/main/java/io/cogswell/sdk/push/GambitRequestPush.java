@@ -262,8 +262,8 @@ public class GambitRequestPush extends GambitRequest {
         }
     }
 
-    public static final String register = "register_push";
-    public static final String unregister = "unregister_push";
+    public static final String register = "/register_push";
+    public static final String unregister = "/unregister_push";
     /**
      * Generated request body
      */
