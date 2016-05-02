@@ -13,11 +13,11 @@ buildscript {
 apply plugin: 'com.android.library'
 apply plugin: 'com.github.dcendents.android-maven'
 apply plugin: 'com.jfrog.bintray'
-//apply plugin: 'maven'
+apply plugin: 'maven'
 //apply plugin: 'maven-publish'
 
 // This is the version of this library used when deploying the artifact to jcenter
-version = '1.0.13'
+version = '1.0.14'
 group = 'io.cogswell'
 def siteUrl = 'https://cogswell.io/'
 def gitUrl = 'https://github.com/cogswell-io/cogs-android-client-sdk'
@@ -117,6 +117,7 @@ dependencies {
   compile 'org.json:json:20160212'
   compile 'com.google.android.gms:play-services:8.3.0'
   compile 'commons-codec:commons-codec:1.10'
+  compile 'com.squareup.okhttp3:okhttp:3.2.0' // We're using a specific version because Android 4.4.2 does not support DELETE requests with body data.
   compile group: 'commons-codec', name: 'commons-codec', version: '1.10'
 }
 

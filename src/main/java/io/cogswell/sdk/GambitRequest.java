@@ -14,7 +14,16 @@ import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.Callable;
 
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+
 public abstract class GambitRequest implements Callable<GambitResponse> {
+
+    public static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
+    OkHttpClient client = new OkHttpClient();
 
     /**
      * Indicate to the server that the request is made by this library. May be useful for debugging.
@@ -59,7 +68,7 @@ public abstract class GambitRequest implements Callable<GambitResponse> {
             return "";
         else
             return text.substring(0, trimOffset);
-    } 
+    }
 
     public GambitRequest() {
         
@@ -110,57 +119,31 @@ public abstract class GambitRequest implements Callable<GambitResponse> {
     public GambitResponse call() throws IOException {
         
         URL url = getUrl();
-        
-        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-
-        connection.setRequestMethod(getMethod());
-        connection.setRequestProperty("User-Agent", API_USER_AGENT);
-        connection.setRequestProperty("Content-Type", "application/json"); //;charset=UTF-8
-        connection.setRequestProperty("Accept", "application/json");
-//        Log.d("connection.getHeaderField(\"Payload-HMAC\")",connection.getHeaderField("Payload-HMAC"));
-        setRequestParams(connection); //allow adapter to set more stuff
-        
         String body = getBody();
-        
+
+        RequestBody bodyJson = RequestBody.create(JSON, body);
+        Request.Builder requestBuilder = new Request.Builder()
+                .url(url)
+                .header("User-Agent", API_USER_AGENT)
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json");
+         //       .method(getMethod(), bodyJson);
+
+        setRequestParams(requestBuilder); //allow adapter to set more stuff
+
         if (body.length() > 0)
         {
-            connection.setRequestProperty("Content-Length", Integer.toString(body.getBytes().length));
-            
-            connection.setDoOutput(true);
-            DataOutputStream wr = new DataOutputStream(connection.getOutputStream());
-            wr.writeBytes(body);
-            wr.flush();
-            wr.close();
+            requestBuilder.method(getMethod(), bodyJson);
+        } else {
+            requestBuilder.method(getMethod(), null);
         }
-        
-        int responseCode;
-        StringBuilder response = new StringBuilder();
-        
-        try {
-            responseCode = connection.getResponseCode();
-            
-            BufferedReader in = new BufferedReader(
-		        new InputStreamReader(connection.getInputStream()));
-            String inputLine;
 
-            while ((inputLine = in.readLine()) != null) {
-                response.append(inputLine);
-            }
-            in.close();
-        }
-        catch (IOException e) {
-            responseCode = 400;
-            
-            BufferedReader in = new BufferedReader(
-		        new InputStreamReader(connection.getErrorStream()));
-            String inputLine;
+        Request request = requestBuilder.build();
+        Response responseObject = client.newCall(request).execute();
 
-            while ((inputLine = in.readLine()) != null) {
-                response.append(inputLine);
-            }
-            in.close();
-        }
-        
+        int responseCode = responseObject.code();
+        String response = responseObject.body().string();
+
         return getResponse(response.toString(), responseCode);
     }
     /**
@@ -180,9 +163,9 @@ public abstract class GambitRequest implements Callable<GambitResponse> {
     abstract protected String getBody();
     /**
      * Use this method to add any additional headers or HTTP connection properties, before making an API call.
-     * @param connection The {@link HttpURLConnection} object that is going to execute the API call.
+     * @param requestBuilder The {@link HttpURLConnection} object that is going to build the API call.
      */
-    abstract protected void setRequestParams(HttpURLConnection connection);
+    abstract protected void setRequestParams(Request.Builder requestBuilder);
     /**
      * This method let's the {@link GambitRequest} inheriting object build it's own {@link GambitResponse} object
      * @param response The RAW HTTP response body as text

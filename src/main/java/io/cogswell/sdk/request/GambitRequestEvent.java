@@ -5,6 +5,7 @@ import android.util.Log;
 import io.cogswell.sdk.GambitRequest;
 import io.cogswell.sdk.GambitResponse;
 import io.cogswell.sdk.response.GambitResponseEvent;
+import okhttp3.Request;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -509,12 +510,12 @@ public class GambitRequestEvent extends GambitRequest {
 
     /**
      * Inject the HMAC-SHA256 hash as a header to the request
-     * @param connection The {@link HttpURLConnection} object that is going to execute the API call.
+     * @param requestBuilder The Request.Builder object that is going to build the API call.
      */
     @Override
-    protected void setRequestParams(HttpURLConnection connection) {
+    protected void setRequestParams(Request.Builder requestBuilder) {
         try {
-            connection.setRequestProperty("Payload-HMAC", getHmac(getBody(), mClientSecret));
+            requestBuilder.header("Payload-HMAC", getHmac(getBody(), mClientSecret));
         } catch (Exception ex) {
             Logger.getLogger(GambitRequest.class.getName()).log(Level.SEVERE, null, ex);
         }

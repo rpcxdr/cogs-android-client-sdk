@@ -1,5 +1,7 @@
 # Ignore IDE artifacts.
 /.project
+/.idea
+*.iml
 
 # Ignore the build artifacts directory
 /build

@@ -6,6 +6,7 @@ import io.cogswell.sdk.GambitRequest;
 import io.cogswell.sdk.GambitResponse;
 import io.cogswell.sdk.Methods;
 import io.cogswell.sdk.response.GambitResponseEvent;
+import okhttp3.Request;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -324,19 +325,15 @@ public class GambitRequestMessage extends GambitRequest {
 
     /**
      * Inject the HMAC-SHA256 hash as a header to the request
-     * @param connection The {@link HttpURLConnection} object that is going to execute the API call.
+     * @param requestBuilder The Request.Builder object that is going to build the API call.
      */
     @Override
-    protected void setRequestParams(HttpURLConnection connection) {
-        try {
-            //Log.d("mPayloadData", mPayloadData);
-            //Log.d("mSignature", String.valueOf(mSignature));
-            //Log.d("mPayload", String.valueOf(mPayload));
-            connection.setRequestProperty("JSON-Base64", mPayload);
-            connection.setRequestProperty("Payload-HMAC", mSignature);
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
+    protected void setRequestParams(Request.Builder requestBuilder) {
+        //Log.d("mPayloadData", mPayloadData);
+        //Log.d("mSignature", String.valueOf(mSignature));
+        //Log.d("mPayload", String.valueOf(mPayload));
+        requestBuilder.header("JSON-Base64", mPayload);
+        requestBuilder.header("Payload-HMAC", mSignature);
     }
 
     /**
