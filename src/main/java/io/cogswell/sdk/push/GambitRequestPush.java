@@ -353,7 +353,7 @@ public class GambitRequestPush extends GambitRequest {
         mPayloadData = payloadData;
 
         try {
-            mSignature = GambitRequest.getHmac(payloadData, builder.getClientSecret());
+            mSignature = Methods.getHmac(payloadData, builder.getClientSecret());
         } catch (NoSuchAlgorithmException e) {
             e.printStackTrace();
         } catch (UnsupportedEncodingException e) {

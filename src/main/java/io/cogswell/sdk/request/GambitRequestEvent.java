@@ -4,6 +4,7 @@ import android.util.Log;
 
 import io.cogswell.sdk.GambitRequest;
 import io.cogswell.sdk.GambitResponse;
+import io.cogswell.sdk.Methods;
 import io.cogswell.sdk.response.GambitResponseEvent;
 import okhttp3.Request;
 
@@ -515,7 +516,7 @@ public class GambitRequestEvent extends GambitRequest {
     @Override
     protected void setRequestParams(Request.Builder requestBuilder) {
         try {
-            requestBuilder.header("Payload-HMAC", getHmac(getBody(), mClientSecret));
+            requestBuilder.header("Payload-HMAC", Methods.getHmac(getBody(), mClientSecret));
         } catch (Exception ex) {
             Logger.getLogger(GambitRequest.class.getName()).log(Level.SEVERE, null, ex);
         }
