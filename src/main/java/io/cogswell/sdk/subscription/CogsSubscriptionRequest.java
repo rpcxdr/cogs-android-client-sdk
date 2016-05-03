@@ -45,11 +45,11 @@ public class CogsSubscriptionRequest {
        return subscription;
     }
 
-    public CogsSubscriptionRequestBuilder builder() {
+    public static CogsSubscriptionRequestBuilder builder() {
         return new CogsSubscriptionRequestBuilder();
     }
 
-    public class CogsSubscriptionRequestBuilder {
+    public static class CogsSubscriptionRequestBuilder {
         CogsSubscriptionRequest request;
 
         private CogsSubscriptionRequestBuilder() {
