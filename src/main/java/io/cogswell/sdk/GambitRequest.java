@@ -47,61 +47,13 @@ public abstract class GambitRequest implements Callable<GambitResponse> {
      * @param baseUrl the base URL of the API. All trailing slashes ('/') will be removed before use in routes.
      */
     public static void setBaseUrl(String baseUrl) {
-        mBaseUrl = trimRight(baseUrl, '/');
-    }
-
-    private static String trimRight(String text, int character) {
-        if (text == null)
-            return null;
-
-        int trimOffset = -1;
-        for (int i = text.length() - 1; i >= 0; i--) {
-            if (text.codePointAt(i) == character)
-                trimOffset = i;
-            else
-                i = -1;
-        }
-
-        if (trimOffset < 0)
-            return text;
-        else if (trimOffset == 0)
-            return "";
-        else
-            return text.substring(0, trimOffset);
+        mBaseUrl = Methods.trimRight(baseUrl, '/');
     }
 
     public GambitRequest() {
         
     }
-    /**
-     * Calculate HMAC-SHA256 hash for a given content and a signing key.
-     *
-     * @param content The content to be signed
-     * @param key The key used for signing
-     * @return HMAC-SHA256 BASE64 Encoded ASCII String
-     * @throws NoSuchAlgorithmException
-     * @throws UnsupportedEncodingException
-     * @throws InvalidKeyException
-     */
-    public static String getHmac(String content, String key) throws NoSuchAlgorithmException, UnsupportedEncodingException, InvalidKeyException {
-        String algorithm = "HmacSHA256";
-        Mac sha256_HMAC = Mac.getInstance(algorithm);
 
-        byte[] key_hex = new byte[0];//org.apache.commons.codec.binary.Hex.decodeHex(key.toCharArray());
-        try {
-            key_hex = Hex.decodeHex(key.toCharArray());
-        } catch (DecoderException e) {
-            e.printStackTrace();
-        }
-
-        SecretKeySpec secret_key = new SecretKeySpec(key_hex, algorithm);
-
-        sha256_HMAC.init(secret_key);
-        byte[] raw = sha256_HMAC.doFinal(content.getBytes("UTF-8"));
-
-        String hmac =  new String(Hex.encodeHex(raw));//android.util.Base64.encodeToString(raw, 16);
-        return hmac;
-    }
     /**
      * Get the base URL for making API calls. Consists of protocol and hostname, including trailing slash
      * @return The API base URL

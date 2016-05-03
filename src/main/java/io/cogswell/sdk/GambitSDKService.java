@@ -1,14 +1,29 @@
 package io.cogswell.sdk;
 
-import io.cogswell.sdk.request.GambitRequestEvent;
+import android.net.Uri;
 
+import com.koushikdutta.async.callback.CompletedCallback;
+import com.koushikdutta.async.http.AsyncHttpClient;
+import com.koushikdutta.async.http.AsyncHttpRequest;
+import com.koushikdutta.async.http.Headers;
+import com.koushikdutta.async.http.WebSocket;
+
+import io.cogswell.sdk.json.Json;
+import io.cogswell.sdk.json.JsonNode;
+import io.cogswell.sdk.request.GambitRequestEvent;
+import io.cogswell.sdk.subscription.CogsMessage;
+import io.cogswell.sdk.subscription.CogsSubscription;
+import io.cogswell.sdk.subscription.CogsSubscriptionHandler;
+import io.cogswell.sdk.subscription.CogsSubscriptionRequest;
+import io.cogswell.sdk.subscription.CogsSubscriptionWebSocket;
+
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 
 public class GambitSDKService {
-
     /**
      * Singleton instance
      */
@@ -18,6 +33,8 @@ public class GambitSDKService {
      * Thread loop
      */
     protected final ExecutorService mExecutor;
+
+    protected ConcurrentHashMap<CogsSubscription, CogsSubscriptionWebSocket> subscriptions = new ConcurrentHashMap<>();
 
     /**
      * Singleton constructor
@@ -57,5 +74,21 @@ public class GambitSDKService {
         return mExecutor.submit(builder.build());
     }
 
+    /**
+     * Establish a new WebSocket via the Cogs GET /push route.
+     *
+     * @param request the {@link CogsSubscriptionRequest request} detailing the subscription
+     * @param handler the {@link CogsSubscriptionHandler handler} for receiving messages from the WebSocket
+     */
+    public void subscribe(final CogsSubscriptionRequest request, final CogsSubscriptionHandler handler) {
+        if (subscriptions.contains(request)) {
+            subscriptions.get(request).replaceHandler(handler);
+        } else {
+            CogsSubscriptionWebSocket oldWebSocket = subscriptions.replace(request.getSubscription(), CogsSubscriptionWebSocket.connect(request, handler));
 
+            if (oldWebSocket != null) {
+               oldWebSocket.close();
+            }
+        }
+    }
 }
