@@ -38,31 +38,31 @@ public class CogsMessage {
         return namespace;
     }
 
-    public String getCiid_hash() {
+    public String getCiidHash() {
         return ciid_hash;
     }
 
-    public String getCampaign_name() {
+    public String getCampaignName() {
         return campaign_name;
     }
 
-    public Long getCampaign_id() {
+    public Long getCampaignId() {
         return campaign_id == null ? null : campaign_id.longValue();
     }
 
-    public String getEvent_name() {
+    public String getEventName() {
         return event_name;
     }
 
-    public String getMessage_id() {
+    public String getMessageId() {
         return message_id;
     }
 
-    public String getNotification_message() {
+    public String getNotificationMessage() {
         return notification_message;
     }
 
-    public CogsEvent getForwarded_event() {
+    public CogsEvent getForwardedEvent() {
         return forwarded_event;
     }
 }

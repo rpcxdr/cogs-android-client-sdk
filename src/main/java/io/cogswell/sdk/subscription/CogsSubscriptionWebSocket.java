@@ -15,6 +15,7 @@ import org.json.JSONObject;
 import java.io.UnsupportedEncodingException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.cogswell.sdk.Methods;
 import io.cogswell.sdk.exceptions.CogsSubscriptionException;
@@ -30,17 +31,27 @@ public class CogsSubscriptionWebSocket implements CogsSubscriptionHandler {
     private static String baseHost = "api.cogswell.io";
     private static String baseUrl = "https://" + baseHost;
 
+    // Easier than null checks... (see currentHandler() method)
+    private static CogsSubscriptionHandler stubHandler = new CogsSubscriptionHandler() {
+        @Override public void error(Throwable error) { }
+        @Override public void connected() { }
+        @Override public void message(CogsMessage message) { }
+        @Override public void closed(Throwable error) { }
+        @Override public void replaced() { }
+    };
+
     private CogsSubscription subscription;
     private CogsSubscriptionHandler handler;
 
     private WebSocket webSocket;
+    private AtomicBoolean closer = new AtomicBoolean(true);
 
     private CogsSubscriptionWebSocket(CogsSubscription subscription) {
         this.subscription = subscription;
     }
 
     private CogsSubscriptionHandler currentHandler() {
-        return handler;
+        return handler == null ? stubHandler : handler;
     }
 
     @Override public void error(Throwable t) {
@@ -63,10 +74,26 @@ public class CogsSubscriptionWebSocket implements CogsSubscriptionHandler {
         ;
     }
 
+    /**
+     * Close the WebSocket permanently. Since this is a clean shutdown, no attempts will
+     * be made to automatically reconnect the underlying WebSocket.
+     */
     public void close() {
-        if (webSocket != null) {
-            webSocket.close();
-            webSocket = null;
+        if (!closer.getAndSet(false))
+            return;
+
+        WebSocket ws = webSocket;
+        CogsSubscriptionHandler h = handler;
+
+        webSocket = null;
+        handler = null;
+
+        try {
+            if (ws != null) {
+                ws.close();
+            }
+        } finally {
+            h.closed(null);
         }
     }
 
@@ -89,6 +116,10 @@ public class CogsSubscriptionWebSocket implements CogsSubscriptionHandler {
 
     private static Uri getPushUri() {
         return Uri.parse(baseUrl + "/push");
+    }
+
+    private void reconnect() {
+        
     }
 
     public static CogsSubscriptionWebSocket connect(CogsSubscriptionRequest request, CogsSubscriptionHandler handler) {
@@ -152,7 +183,11 @@ public class CogsSubscriptionWebSocket implements CogsSubscriptionHandler {
 
                                 if (!json.isNull()) {
                                     CogsMessage message = new CogsMessage(json);
-                                    ws.message(message);
+                                    try {
+                                        ws.ackMessage(message.getMessageId());
+                                    } finally {
+                                        ws.message(message);
+                                    }
                                 }
                             }
                         });
@@ -180,5 +215,20 @@ public class CogsSubscriptionWebSocket implements CogsSubscriptionHandler {
         }
 
         return ws;
+    }
+
+    private void ackMessage(String messageId) {
+        WebSocket ws = webSocket;
+
+        if (ws != null) {
+            JSONObject json = new JSONObject();
+            try {
+                json.put("event", "message-received");
+                json.put("message_id", messageId);
+                ws.send(json.toString());
+            } catch (Throwable error) {
+                Log.e("Cogs-SDK", "Error sending message acknowledgement", error);
+            }
+        }
     }
 }
