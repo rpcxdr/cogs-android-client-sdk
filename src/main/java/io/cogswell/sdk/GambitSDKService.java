@@ -1,6 +1,7 @@
 package io.cogswell.sdk;
 
 import android.net.Uri;
+import android.util.Log;
 
 import com.koushikdutta.async.callback.CompletedCallback;
 import com.koushikdutta.async.http.AsyncHttpClient;
@@ -81,14 +82,14 @@ public class GambitSDKService {
      * @param handler the {@link CogsSubscriptionHandler handler} for receiving messages from the WebSocket
      */
     public void subscribe(final CogsSubscriptionRequest request, final CogsSubscriptionHandler handler) {
-        if (subscriptions.contains(request)) {
-            subscriptions.get(request).replaceHandler(handler);
-        } else {
-            CogsSubscriptionWebSocket oldWebSocket = subscriptions.replace(request.getSubscription(), CogsSubscriptionWebSocket.connect(request, handler));
+        CogsSubscriptionWebSocket oldWebSocket = subscriptions.get(request);
 
-            if (oldWebSocket != null) {
-               oldWebSocket.close();
-            }
+        if (oldWebSocket != null) {
+            Log.i("Cogs-SDK", "Replacing handler for existing WebSocket.");
+            oldWebSocket.replaceHandler(handler);
+        } else {
+            Log.i("Cogs-SDK", "Creating new WebSocket.");
+            subscriptions.put(request.getSubscription(), CogsSubscriptionWebSocket.connect(request, handler));
         }
     }
 }

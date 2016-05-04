@@ -9,9 +9,9 @@ public interface CogsSubscriptionHandler {
     /**
      * Called when an error occurs establishing the WebSocket.
      *
-     * @param t the {@link Throwable error}
+     * @param error the {@link Throwable error} which occurred
      */
-    public void error(Throwable t);
+    public void error(Throwable error);
 
     /**
      * Called when the WebSocket is established.
@@ -27,8 +27,11 @@ public interface CogsSubscriptionHandler {
 
     /**
      * Called when the WebSocket is closed.
+     *
+     * @param error the {@link Throwable error} which resulted in the closing of the WebSocket,
+     *              or <tt>null</tt> if there was no error associated with the closing of the WebSocket
      */
-    public void closed();
+    public void closed(Throwable error);
 
     /**
      * Called with this handler is replaced by another.
