@@ -12,12 +12,14 @@ import com.koushikdutta.async.http.WebSocket;
 import io.cogswell.sdk.json.Json;
 import io.cogswell.sdk.json.JsonNode;
 import io.cogswell.sdk.request.GambitRequestEvent;
+import io.cogswell.sdk.subscription.Callback;
 import io.cogswell.sdk.subscription.CogsMessage;
 import io.cogswell.sdk.subscription.CogsSubscription;
 import io.cogswell.sdk.subscription.CogsSubscriptionHandler;
 import io.cogswell.sdk.subscription.CogsSubscriptionRequest;
 import io.cogswell.sdk.subscription.CogsSubscriptionWebSocket;
 
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -89,7 +91,27 @@ public class GambitSDKService {
             oldWebSocket.replaceHandler(handler);
         } else {
             Log.i("Cogs-SDK", "Creating new WebSocket.");
-            subscriptions.put(request.getSubscription(), CogsSubscriptionWebSocket.connect(request, handler));
+            subscriptions.put(request.getSubscription(), CogsSubscriptionWebSocket.create(request, handler));
         }
+    }
+
+    /**
+     * Terminate a subscription.
+     *
+     * @param subscription the subscription to terminate
+     * @param callback the {@link Callback} to invoke once the subscription is terminated.
+     */
+    public void unsubscribe(final CogsSubscription subscription, final Callback<Boolean> callback) {
+        CogsSubscriptionWebSocket ws = subscriptions.remove(subscription);
+        ws.stop(callback);
+    }
+
+    /**
+     * Get a set containing all established subscriptions.
+     *
+     * @return the {@link Set} of subscriptions
+     */
+    public Set<CogsSubscription> getSubscriptions() {
+        return subscriptions.keySet();
     }
 }

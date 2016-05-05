@@ -49,6 +49,9 @@ public class CogsSubscriptionWebSocket implements CogsSubscriptionHandler {
     private AtomicBoolean starter = new AtomicBoolean(true);
     private AtomicBoolean stopper = new AtomicBoolean(true);
 
+    private boolean started = false;
+    private boolean stopped = false;
+
     private CogsSubscriptionWebSocket(CogsSubscriptionRequest request) {
         this.request = request;
     }
@@ -75,13 +78,6 @@ public class CogsSubscriptionWebSocket implements CogsSubscriptionHandler {
 
     @Override public void replaced() {
         ;
-    }
-
-    /**
-     * Close the WebSocket permanently. Since this is a clean shutdown, no attempts will
-     * be made to automatically reconnect the underlying WebSocket.
-     */
-    public void close() {
     }
 
     public void replaceHandler(CogsSubscriptionHandler handler) {
@@ -112,9 +108,6 @@ public class CogsSubscriptionWebSocket implements CogsSubscriptionHandler {
         Headers headers = buildHeaders(baseHost, request);
         AsyncHttpRequest httpRequest = new AsyncHttpRequest(getPushUri(), "GET", headers);
 
-        final CogsSubscriptionWebSocket ws = new CogsSubscriptionWebSocket(request);
-        ws.replaceHandler(handler);
-
         try {
             AsyncHttpClient.getDefaultInstance().websocket(httpRequest, "cogs", new AsyncHttpClient.WebSocketConnectCallback() {
                 @Override
@@ -123,9 +116,9 @@ public class CogsSubscriptionWebSocket implements CogsSubscriptionHandler {
 
                     if (error != null) {
                         Log.e("Cogs-SDK", "Error on subscription WebSocket connect.", error);
-                        ws.error(error);
+                        error(error);
                     } else {
-                        ws.setWebSocket(webSocket);
+                        setWebSocket(webSocket);
 
                         webSocket.setStringCallback(new WebSocket.StringCallback() {
                             @Override
@@ -135,9 +128,9 @@ public class CogsSubscriptionWebSocket implements CogsSubscriptionHandler {
                                 if (!json.isNull()) {
                                     CogsMessage message = new CogsMessage(json);
                                     try {
-                                        ws.ackMessage(message.getMessageId());
+                                        ackMessage(message.getMessageId());
                                     } finally {
-                                        ws.message(message);
+                                        message(message);
                                     }
                                 }
                             }
@@ -152,11 +145,26 @@ public class CogsSubscriptionWebSocket implements CogsSubscriptionHandler {
                                     Log.i("Cogs-SDK", "WebSocket closed without error.");
                                 }
 
-                                ws.closed(error);
+                                if (stopped) {
+                                    closed(error);
+                                } else {
+                                    new Thread(new Runnable() {
+                                        public void run() {
+                                            try {
+                                                Log.i("Cogs-SDK", "reconnecting in 5 seconds.");
+                                                Thread.sleep(5000);
+                                            } catch (InterruptedException e) {
+                                                Log.e("Cogs-SDK", "Interrupted while delaying for reconnect.", e);
+                                            } finally {
+                                                reconnect();
+                                            }
+                                        }
+                                    }).start();
+                                }
                             }
                         });
 
-                        ws.connected();
+                        connected();
                     }
                 }
             });
@@ -189,16 +197,22 @@ public class CogsSubscriptionWebSocket implements CogsSubscriptionHandler {
         if (!starter.getAndSet(false))
             return;
 
+        started = true;
         reconnect();
     }
 
     /**
      * Stops this subscription WebSocket.
+     *
+     * @param callback the {@link Callback} to invoke once this subscription WebSocket has been stopped.
      */
-    public void stop() {
-        if (!stopper.getAndSet(false))
+    public void stop(Callback<Boolean> callback) {
+        if (!stopper.getAndSet(false)) {
+            callback.call(false);
             return;
+        }
 
+        stopped = true;
         WebSocket ws = webSocket;
         CogsSubscriptionHandler h = handler;
 
@@ -210,7 +224,11 @@ public class CogsSubscriptionWebSocket implements CogsSubscriptionHandler {
                 ws.close();
             }
         } finally {
-            h.closed(null);
+            try {
+                h.closed(null);
+            } finally {
+                callback.call(true);
+            }
         }
     }
 
@@ -252,10 +270,18 @@ public class CogsSubscriptionWebSocket implements CogsSubscriptionHandler {
         return headers;
     }
 
+    /**
+     * Creates a new instance.
+     *
+     * @param request the {@link CogsSubscriptionRequest} detailing auth and the subscription
+     * @param handler the {@link CogsSubscriptionHandler} to handle subscription events
+     *
+     * @return the new {@link CogsSubscriptionWebSocket websocket}
+     */
     public static CogsSubscriptionWebSocket create(CogsSubscriptionRequest request, CogsSubscriptionHandler handler) {
-        return new CogsSubscriptionWebSocket(request);
-    }
+        CogsSubscriptionWebSocket ws = new CogsSubscriptionWebSocket(request);
+        ws.replaceHandler(handler);
 
-    public static CogsSubscriptionWebSocket connect(CogsSubscriptionRequest request, CogsSubscriptionHandler handler) {
+        return ws;
     }
 }
