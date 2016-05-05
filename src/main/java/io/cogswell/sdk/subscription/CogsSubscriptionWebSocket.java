@@ -1,5 +1,6 @@
 package io.cogswell.sdk.subscription;
 
+import android.app.DownloadManager;
 import android.net.Uri;
 import android.util.Log;
 
@@ -40,14 +41,16 @@ public class CogsSubscriptionWebSocket implements CogsSubscriptionHandler {
         @Override public void replaced() { }
     };
 
-    private CogsSubscription subscription;
+    private CogsSubscriptionRequest request;
     private CogsSubscriptionHandler handler;
 
     private WebSocket webSocket;
-    private AtomicBoolean closer = new AtomicBoolean(true);
 
-    private CogsSubscriptionWebSocket(CogsSubscription subscription) {
-        this.subscription = subscription;
+    private AtomicBoolean starter = new AtomicBoolean(true);
+    private AtomicBoolean stopper = new AtomicBoolean(true);
+
+    private CogsSubscriptionWebSocket(CogsSubscriptionRequest request) {
+        this.request = request;
     }
 
     private CogsSubscriptionHandler currentHandler() {
@@ -79,22 +82,6 @@ public class CogsSubscriptionWebSocket implements CogsSubscriptionHandler {
      * be made to automatically reconnect the underlying WebSocket.
      */
     public void close() {
-        if (!closer.getAndSet(false))
-            return;
-
-        WebSocket ws = webSocket;
-        CogsSubscriptionHandler h = handler;
-
-        webSocket = null;
-        handler = null;
-
-        try {
-            if (ws != null) {
-                ws.close();
-            }
-        } finally {
-            h.closed(null);
-        }
     }
 
     public void replaceHandler(CogsSubscriptionHandler handler) {
@@ -119,49 +106,13 @@ public class CogsSubscriptionWebSocket implements CogsSubscriptionHandler {
     }
 
     private void reconnect() {
-        
-    }
-
-    public static CogsSubscriptionWebSocket connect(CogsSubscriptionRequest request, CogsSubscriptionHandler handler) {
         Log.i("Cogs-SDK", "Connecting push subscription WebSocket to namespace '" +
                 request.getNamespace() + "' topic '" + request.getTopicAttributes() + "'.");
 
-        Headers headers = new Headers();
-        JSONObject payload = new JSONObject();
-
-        try {
-            payload.put("access_key", request.getAccessKey());
-            payload.put("client_salt", request.getClientSalt());
-            payload.put("timestamp", Methods.isoNow());
-            payload.put("namespace", request.getNamespace());
-            payload.put("attributes", request.getTopicAttributes());
-        } catch (JSONException e) {
-            throw new CogsSubscriptionException("Error assembling WebSocket auth headers.", e);
-        }
-
-        String jsonPayload = payload.toString();
-        byte[] rawPayload = jsonPayload.getBytes(Methods.UTF_8);
-        String b64Payload = Methods._printBase64Binary(rawPayload);
-
-        String hmac;
-
-        try {
-            hmac = Methods.getHmac(jsonPayload, request.getClientSecret());
-        } catch (NoSuchAlgorithmException | UnsupportedEncodingException | InvalidKeyException e) {
-            throw new CogsSubscriptionException("Error signing auth payload header.", e);
-        }
-
-        headers.add("Host", baseHost);
-        headers.add("Json-Base64" , b64Payload);
-        headers.add("Payload-HMAC" , hmac);
-
-        Log.i("Cogs-SDK", "Payload JSON: " + jsonPayload);
-        Log.i("Cogs-SDK", "Json-Base64: " + b64Payload);
-        Log.i("Cogs-SDK", "Payload-HMAC" + hmac);
-
+        Headers headers = buildHeaders(baseHost, request);
         AsyncHttpRequest httpRequest = new AsyncHttpRequest(getPushUri(), "GET", headers);
 
-        final CogsSubscriptionWebSocket ws = new CogsSubscriptionWebSocket(request.getSubscription());
+        final CogsSubscriptionWebSocket ws = new CogsSubscriptionWebSocket(request);
         ws.replaceHandler(handler);
 
         try {
@@ -213,8 +164,6 @@ public class CogsSubscriptionWebSocket implements CogsSubscriptionHandler {
             Log.e("Cogs-SDK", "Error connecting Subscription WebSocket.", t);
             throw new CogsSubscriptionException("Error connecting Subscription WebSocket.", t);
         }
-
-        return ws;
     }
 
     private void ackMessage(String messageId) {
@@ -230,5 +179,83 @@ public class CogsSubscriptionWebSocket implements CogsSubscriptionHandler {
                 Log.e("Cogs-SDK", "Error sending message acknowledgement", error);
             }
         }
+    }
+
+    /**
+     * Starts this subscription WebSocket. If the inner WebSocket terminates for a reason other
+     * than a call to stop(), it will be replaced automatically.
+     */
+    public void start() {
+        if (!starter.getAndSet(false))
+            return;
+
+        reconnect();
+    }
+
+    /**
+     * Stops this subscription WebSocket.
+     */
+    public void stop() {
+        if (!stopper.getAndSet(false))
+            return;
+
+        WebSocket ws = webSocket;
+        CogsSubscriptionHandler h = handler;
+
+        webSocket = null;
+        handler = null;
+
+        try {
+            if (ws != null) {
+                ws.close();
+            }
+        } finally {
+            h.closed(null);
+        }
+    }
+
+    private Headers buildHeaders(String host, CogsSubscriptionRequest request) {
+        JSONObject payload = new JSONObject();
+
+        Headers headers = new Headers();
+
+        try {
+            payload.put("access_key", request.getAccessKey());
+            payload.put("client_salt", request.getClientSalt());
+            payload.put("timestamp", Methods.isoNow());
+            payload.put("namespace", request.getNamespace());
+            payload.put("attributes", request.getTopicAttributes());
+        } catch (JSONException e) {
+            throw new CogsSubscriptionException("Error assembling WebSocket auth headers.", e);
+        }
+
+        String jsonPayload = payload.toString();
+        byte[] rawPayload = jsonPayload.getBytes(Methods.UTF_8);
+        String b64Payload = Methods._printBase64Binary(rawPayload);
+
+        String hmac;
+
+        try {
+            hmac = Methods.getHmac(jsonPayload, request.getClientSecret());
+        } catch (NoSuchAlgorithmException | UnsupportedEncodingException | InvalidKeyException e) {
+            throw new CogsSubscriptionException("Error signing auth payload header.", e);
+        }
+
+        headers.add("Host", host);
+        headers.add("Json-Base64" , b64Payload);
+        headers.add("Payload-HMAC" , hmac);
+
+        Log.i("Cogs-SDK", "Payload JSON: " + jsonPayload);
+        Log.i("Cogs-SDK", "Json-Base64: " + b64Payload);
+        Log.i("Cogs-SDK", "Payload-HMAC" + hmac);
+
+        return headers;
+    }
+
+    public static CogsSubscriptionWebSocket create(CogsSubscriptionRequest request, CogsSubscriptionHandler handler) {
+        return new CogsSubscriptionWebSocket(request);
+    }
+
+    public static CogsSubscriptionWebSocket connect(CogsSubscriptionRequest request, CogsSubscriptionHandler handler) {
     }
 }
