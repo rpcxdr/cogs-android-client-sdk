@@ -24,6 +24,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 
 public class GambitSDKService {
@@ -36,6 +38,7 @@ public class GambitSDKService {
      * Thread loop
      */
     protected final ExecutorService mExecutor;
+    protected final ScheduledExecutorService mScheduler;
 
     protected ConcurrentHashMap<CogsSubscription, CogsSubscriptionWebSocket> subscriptions = new ConcurrentHashMap<>();
 
@@ -44,7 +47,7 @@ public class GambitSDKService {
      */
     protected GambitSDKService() throws RuntimeException {
         mExecutor = Executors.newCachedThreadPool();
-
+        mScheduler = Executors.newScheduledThreadPool(2);
     }
 
     /**
@@ -59,12 +62,43 @@ public class GambitSDKService {
 
         return mInstance;
     }
+
     /**
-     * Get the main thread pool
-     * @return executor service
+     * Supplies the singleton executor service.
+     *
+     * @return the {@link ExecutorService executor service}
      */
     protected ExecutorService getExecutorService() {
         return mExecutor;
+    }
+
+    /**
+     * Supplies the singleton scheduler service.
+     *
+     * @return the {@link ScheduledExecutorService scheduler service}
+     */
+    protected ScheduledExecutorService getSchedulerService() {
+        return mScheduler;
+    }
+
+    /**
+     * Executes an operation in the executor.
+     *
+     * @param runnable the {@link Runnable} to execute
+     */
+    public void execute(Runnable runnable) {
+        getExecutorService().execute(runnable);
+    }
+
+    /**
+     * Execuates an operation in the scheduler after a delay.
+     *
+     * @param delay the delay before execution
+     * @param unit the {@link TimeUnit units} of the delay
+     * @param runnable the {@link Runnable} to execute
+     */
+    public void schedule(long delay, TimeUnit unit, Runnable runnable) {
+        getSchedulerService().schedule(runnable, delay, unit);
     }
 
     /**

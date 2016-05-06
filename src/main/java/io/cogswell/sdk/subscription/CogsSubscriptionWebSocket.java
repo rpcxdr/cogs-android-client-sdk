@@ -16,8 +16,11 @@ import org.json.JSONObject;
 import java.io.UnsupportedEncodingException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import io.cogswell.sdk.GambitSDKService;
 import io.cogswell.sdk.Methods;
 import io.cogswell.sdk.exceptions.CogsSubscriptionException;
 import io.cogswell.sdk.json.Json;
@@ -28,7 +31,7 @@ import io.cogswell.sdk.json.JsonNode;
  *
  * Ties a WebSocket to a subscription.
  */
-public class CogsSubscriptionWebSocket implements CogsSubscriptionHandler {
+public class CogsSubscriptionWebSocket {
     private static String baseHost = "api.cogswell.io";
     private static String baseUrl = "https://" + baseHost;
 
@@ -58,26 +61,6 @@ public class CogsSubscriptionWebSocket implements CogsSubscriptionHandler {
 
     private CogsSubscriptionHandler currentHandler() {
         return handler == null ? stubHandler : handler;
-    }
-
-    @Override public void error(Throwable t) {
-        currentHandler().error(t);
-    }
-
-    @Override public void connected() {
-        currentHandler().connected();
-    }
-
-    @Override public void message(CogsMessage message) {
-        currentHandler().message(message);
-    }
-
-    @Override public void closed(Throwable t) {
-        currentHandler().closed(t);
-    }
-
-    @Override public void replaced() {
-        ;
     }
 
     public void replaceHandler(CogsSubscriptionHandler handler) {
@@ -116,7 +99,7 @@ public class CogsSubscriptionWebSocket implements CogsSubscriptionHandler {
 
                     if (error != null) {
                         Log.e("Cogs-SDK", "Error on subscription WebSocket connect.", error);
-                        error(error);
+                        currentHandler().error(error);
                     } else {
                         setWebSocket(webSocket);
 
@@ -130,7 +113,7 @@ public class CogsSubscriptionWebSocket implements CogsSubscriptionHandler {
                                     try {
                                         ackMessage(message.getMessageId());
                                     } finally {
-                                        message(message);
+                                        currentHandler().message(message);
                                     }
                                 }
                             }
@@ -146,25 +129,20 @@ public class CogsSubscriptionWebSocket implements CogsSubscriptionHandler {
                                 }
 
                                 if (stopped) {
-                                    closed(error);
+                                    currentHandler().closed(error);
                                 } else {
-                                    new Thread(new Runnable() {
+                                    Log.i("Cogs-SDK", "reconnecting in 5 seconds.");
+
+                                    GambitSDKService.getInstance().schedule(5000, TimeUnit.MILLISECONDS, new Runnable() {
                                         public void run() {
-                                            try {
-                                                Log.i("Cogs-SDK", "reconnecting in 5 seconds.");
-                                                Thread.sleep(5000);
-                                            } catch (InterruptedException e) {
-                                                Log.e("Cogs-SDK", "Interrupted while delaying for reconnect.", e);
-                                            } finally {
-                                                reconnect();
-                                            }
+                                            reconnect();
                                         }
-                                    }).start();
+                                    });
                                 }
                             }
                         });
 
-                        connected();
+                        currentHandler().connected();
                     }
                 }
             });
