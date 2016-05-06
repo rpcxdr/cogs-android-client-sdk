@@ -91,7 +91,9 @@ public class GambitSDKService {
             oldWebSocket.replaceHandler(handler);
         } else {
             Log.i("Cogs-SDK", "Creating new WebSocket.");
-            subscriptions.put(request.getSubscription(), CogsSubscriptionWebSocket.create(request, handler));
+            CogsSubscriptionWebSocket webSocket = CogsSubscriptionWebSocket.create(request, handler);
+            subscriptions.put(request.getSubscription(), webSocket);
+            webSocket.start();
         }
     }
 
