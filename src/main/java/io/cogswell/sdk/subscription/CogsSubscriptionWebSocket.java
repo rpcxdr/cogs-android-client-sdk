@@ -54,6 +54,7 @@ public class CogsSubscriptionWebSocket {
 
     private boolean started = false;
     private boolean stopped = false;
+    private boolean reconnecting = false;
 
     private CogsSubscriptionWebSocket(CogsSubscriptionRequest request) {
         this.request = request;
@@ -72,7 +73,7 @@ public class CogsSubscriptionWebSocket {
         }
     }
 
-    protected void setWebSocket(WebSocket webSocket) {
+    private void setWebSocket(WebSocket webSocket) {
         this.webSocket = webSocket;
     }
 
@@ -85,18 +86,24 @@ public class CogsSubscriptionWebSocket {
     }
 
     private void reconnect() {
-        Log.i("Cogs-SDK", "Connecting push subscription WebSocket to namespace '" +
-                request.getNamespace() + "' topic '" + request.getTopicAttributes() + "'.");
+        if (!reconnecting) {
+            doReconnect();
+        }
+    }
 
-        Headers headers = buildHeaders(baseHost, request);
-        AsyncHttpRequest httpRequest = new AsyncHttpRequest(getPushUri(), "GET", headers);
-
+    private synchronized void doReconnect() {
         try {
+            reconnecting = true;
+
+            Log.i("Cogs-SDK", "Connecting push subscription WebSocket to namespace '" +
+                    request.getNamespace() + "' topic '" + request.getTopicAttributes() + "'.");
+
+            Headers headers = buildHeaders(baseHost, request);
+            AsyncHttpRequest httpRequest = new AsyncHttpRequest(getPushUri(), "GET", headers);
+
             AsyncHttpClient.getDefaultInstance().websocket(httpRequest, "cogs", new AsyncHttpClient.WebSocketConnectCallback() {
                 @Override
                 public void onCompleted(Exception error, WebSocket webSocket) {
-                    webSocket.isOpen();
-
                     if (error != null) {
                         Log.e("Cogs-SDK", "Error on subscription WebSocket connect.", error);
                         currentHandler().error(error);
@@ -131,13 +138,7 @@ public class CogsSubscriptionWebSocket {
                                 if (stopped) {
                                     currentHandler().closed(error);
                                 } else {
-                                    Log.i("Cogs-SDK", "reconnecting in 5 seconds.");
-
-                                    GambitSDKService.getInstance().schedule(5000, TimeUnit.MILLISECONDS, new Runnable() {
-                                        public void run() {
-                                            reconnect();
-                                        }
-                                    });
+                                    delayedReconnect();
                                 }
                             }
                         });
@@ -148,8 +149,20 @@ public class CogsSubscriptionWebSocket {
             });
         } catch (Throwable t) {
             Log.e("Cogs-SDK", "Error connecting Subscription WebSocket.", t);
-            throw new CogsSubscriptionException("Error connecting Subscription WebSocket.", t);
+            delayedReconnect();
+        } finally {
+            reconnecting = false;
         }
+    }
+
+    private void delayedReconnect() {
+        Log.i("Cogs-SDK", "Reconnecting in 5 seconds.");
+
+        GambitSDKService.getInstance().schedule(5000, TimeUnit.MILLISECONDS, new Runnable() {
+            public void run() {
+                reconnect();
+            }
+        });
     }
 
     private void ackMessage(String messageId) {
