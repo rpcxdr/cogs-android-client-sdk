@@ -1,21 +1,11 @@
 package io.cogswell.sdk;
 
-
-import org.apache.commons.codec.DecoderException;
-import org.apache.commons.codec.binary.Hex;
-
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.Callable;
 
 import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
@@ -23,7 +13,6 @@ import okhttp3.Response;
 public abstract class GambitRequest implements Callable<GambitResponse> {
 
     public static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
-    OkHttpClient client = new OkHttpClient();
 
     /**
      * Indicate to the server that the request is made by this library. May be useful for debugging.
@@ -91,12 +80,19 @@ public abstract class GambitRequest implements Callable<GambitResponse> {
         }
 
         Request request = requestBuilder.build();
-        Response responseObject = client.newCall(request).execute();
+        Response responseObject = null;
+        try {
+            responseObject = OkHttpClientSingleton.getInstance().newCall(request).execute();
 
-        int responseCode = responseObject.code();
-        String response = responseObject.body().string();
+            int responseCode = responseObject.code();
+            String response = responseObject.body().string();
 
-        return getResponse(response.toString(), responseCode);
+            return getResponse(response, responseCode);
+        } finally {
+            if(responseObject != null) {
+                responseObject.body().close();
+            }
+        }
     }
     /**
      * Define the HTTP method to be used to make the API call

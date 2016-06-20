@@ -1,6 +1,5 @@
 package io.cogswell.sdk.subscription;
 
-import android.app.DownloadManager;
 import android.net.Uri;
 import android.util.Log;
 
@@ -16,7 +15,6 @@ import org.json.JSONObject;
 import java.io.UnsupportedEncodingException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -166,14 +164,12 @@ public class CogsSubscriptionWebSocket {
     }
 
     private void ackMessage(String messageId) {
-        WebSocket ws = webSocket;
-
-        if (ws != null) {
+        if (webSocket != null) {
             JSONObject json = new JSONObject();
             try {
                 json.put("event", "message-received");
                 json.put("message_id", messageId);
-                ws.send(json.toString());
+                webSocket.send(json.toString());
             } catch (Throwable error) {
                 Log.e("Cogs-SDK", "Error sending message acknowledgement", error);
             }
