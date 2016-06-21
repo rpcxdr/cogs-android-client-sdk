@@ -4,7 +4,7 @@
 The Android SDK for the Cogs real-time message brokering system.
 
 ## Requirements
-* Android 4.0.4+
+* Android 5+ (if you need pre-5.x compatibility, please let us know support@cogswell.io)
 * Android Studio 1.5.0
 * Requires GCM enabled application. You can read more about GCM [here](https://developers.google.com/cloud-messaging/)
 
