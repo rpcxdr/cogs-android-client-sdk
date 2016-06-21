@@ -1,14 +1,15 @@
 package io.cogswell.sdk;
 
-import java.io.*;
+import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.concurrent.Callable;
 
+import io.cogswell.sdk.response.OkHttpClientSingleton;
 import okhttp3.MediaType;
 import okhttp3.Request;
-import okhttp3.RequestBody;
 import okhttp3.Response;
+import okhttp3.RequestBody;
 
 public abstract class GambitRequest implements Callable<GambitResponse> {
 
