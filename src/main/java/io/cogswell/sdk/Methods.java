@@ -140,12 +140,13 @@ public class Methods {
     public static String getHmac(String content, String key) throws NoSuchAlgorithmException, UnsupportedEncodingException, InvalidKeyException {
         Mac sha256_HMAC = Mac.getInstance(ALGORITHM_HMAC_SHA256);
 
-        byte[] key_hex = new byte[0];//org.apache.commons.codec.binary.Hex.decodeHex(key.toCharArray());
+        byte[] key_hex;
 
         try {
             key_hex = Hex.decodeHex(key.toCharArray());
         } catch (DecoderException e) {
             e.printStackTrace();
+            key_hex = new byte[0];
         }
 
         SecretKeySpec keySpec = new SecretKeySpec(key_hex, ALGORITHM_HMAC_SHA256);
