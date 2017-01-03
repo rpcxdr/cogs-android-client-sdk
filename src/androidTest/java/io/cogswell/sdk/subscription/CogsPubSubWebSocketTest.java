@@ -77,34 +77,7 @@ public class CogsPubSubWebSocketTest extends TestCase {
         });
         Thread.sleep(1000);
     }
-    /*
-    public void testCreate() throws Exception {
-        Log.d("TEST", "~~~~~~~~~~~~~~~~~~~~ hello1");
 
-
-        String timestamp = (new SimpleDateFormat("yyyy-MM-dd'T'HH:mmZ")).format(new Date());
-        String namespace = "jae_test_namespace_2";
-        String eventName = "e1";
-        Integer campaignId = -1;
-        JSONObject attributes = new JSONObject();
-        attributes.put("jae_test_core_attribute", "test@email.com");
-        String accessKey = "a03385c4193beb5edda099772bf5467c";
-        String clientSalt = "ca91e3bfa015eaa108acb3c9c5fd7bd01e276ff18fef23600f402b05c70139a7";
-        String clientSecret = "7b363e4b364005ae68e693d3532dae3e79fca24b8cebdb4b90e22fa4e6bc206f";
-
-        CogsPubSubWebSocket.setBaseUrl("https://gamqa-api.aviatainc.com");
-        CogsSubscriptionRequest sr = CogsSubscriptionRequest.builder()
-                .withAccessKey(accessKey)
-                .withClientSalt(clientSalt)
-                .withClientSecret(clientSecret)
-                .withNamespace(namespace)
-                .withTopicAttributes(attributes)
-                .build();
-        CogsPubSubWebSocket ws = CogsPubSubWebSocket.create(sr, null);
-        ws.start();
-
-    }
-*/
     private Headers buildHeaders() throws Auth.AuthKeyError {
 
         // Valid QA keys:
