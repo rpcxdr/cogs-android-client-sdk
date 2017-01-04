@@ -1,9 +1,11 @@
 package io.cogswell.sdk.pubsub;
 
+import android.net.Uri;
+
 public class PubSubOptions {
-    String url;
     boolean autoReconnect;
     long connectTimeout;
+    Uri uri;
 
     public PubSubOptions (String url) {
         this(url, true, 30000);
@@ -14,7 +16,7 @@ public class PubSubOptions {
     }
 
     public PubSubOptions (String url, Boolean autoReconnect, long connectTimeout) {
-        this.url = url;
+        this.uri = Uri.parse(url);
         this.autoReconnect = autoReconnect;
         this.connectTimeout = connectTimeout;
     }

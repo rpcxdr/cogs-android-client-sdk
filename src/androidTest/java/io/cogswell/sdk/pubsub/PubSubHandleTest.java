@@ -1,5 +1,7 @@
 package io.cogswell.sdk.pubsub;
 
+import android.util.Log;
+
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -18,15 +20,21 @@ public class PubSubHandleTest extends TestCase {
         final CountDownLatch signal = new CountDownLatch(1);
         Object result = null;
 
-        ListenableFuture<PubSubHandle> lf = PubSubHandle.connect(null,null);
+        String[] keys = {
+                "A-*-*",
+                "R-*-*",
+                "W-*-*"
+        };
+
+        ListenableFuture<PubSubHandle> lf = PubSubHandle.connect(keys);
         assertNotNull(lf);
         Futures.addCallback(lf, new FutureCallback<PubSubHandle>() {
-            // we want this handler to run immediately after we push the big red button!
             public void onSuccess(PubSubHandle psh) {
                 PubSubHandleTest.this.result = psh;
                 signal.countDown();
             }
             public void onFailure(Throwable error) {
+                Log.e("TEST","Error:",error);
                 PubSubHandleTest.this.result = error;
                 signal.countDown();
             }

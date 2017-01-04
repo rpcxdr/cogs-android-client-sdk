@@ -83,7 +83,7 @@ public class Auth {
      * @throws AuthKeyError
      */
     public static PayloadHeaders socketAuth(String[] keys) throws AuthKeyError {
-        if (keys.length == 0) {
+        if (keys == null || keys.length == 0) {
             throw new AuthKeyError("No keys supplied.");
         }
         // NOTE: For backward compatibility, we cannot use Java's map/reduce streams.
