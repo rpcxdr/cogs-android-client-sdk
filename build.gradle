@@ -33,18 +33,18 @@ android {
 //  compileSdkVersion 15
   buildToolsVersion '23.0.3'
 
-  dexOptions {
-    incremental true
-    javaMaxHeapSize "4g"
-  }
+//  dexOptions {
+//    incremental true
+//    javaMaxHeapSize "4g"
+//  }
 
   defaultConfig {
     minSdkVersion 15
 //    targetSdkVersion 15
     targetSdkVersion 23
 
-    multiDexEnabled true
-    testInstrumentationRunner "com.android.test.runner.MultiDexTestRunner"
+//    multiDexEnabled true
+//    testInstrumentationRunner "com.android.test.runner.MultiDexTestRunner"
   }
 
   lintOptions {
@@ -54,6 +54,16 @@ android {
   buildTypes {
     debug {
       debuggable true
+      minifyEnabled true
+      // http://stackoverflow.com/questions/36617801/what-is-the-good-strategy-when-dealing-with-proguard-multidex-testing-and-prod
+      proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-test-rules.pro'
+
+
+      //testProguardFile 'proguard-test-rules.pro'
+      //testProguardFiles getDefaultProguardFile('proguard-android.txt'), 'INVALID/proguard-test-rules.pro'
+      //testProguardFile('proguard-rules-test.pro')
+//      proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules-debug.pro', `proguard-rules-dontobfuscate.pro`
+
     }
   }
 }

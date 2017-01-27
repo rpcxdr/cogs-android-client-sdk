@@ -145,4 +145,25 @@ public class PubSubHandle {
         }*/
     }
 
+    /**
+     * Publishes a message to the server. If an error occurs publishing the message,
+     * it will be reported to the error handler if it has been set.
+     *
+     * @param channel
+     * @param message
+     */
+    public void publish(String channel, String message) {
+        String payload = String.format(
+                "{"+
+                        "\"seq\":\"%s\","+
+                        "\"action\":\"%s\","+
+                        "\"chan\":\"%s\""+
+                        "\"msg\":\"%s\""+
+                        "}",
+                1, "pub", channel, message);
+
+        // val (seq, None) = newRequest(false)
+        // socket.foreach(_.send(PublishRequest(seq, channel, message).toJson))
+    }
+
 }
