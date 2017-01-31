@@ -33,18 +33,18 @@ android {
 //  compileSdkVersion 15
   buildToolsVersion '23.0.3'
 
-//  dexOptions {
-//    incremental true
-//    javaMaxHeapSize "4g"
-//  }
+  dexOptions {
+    incremental true
+    javaMaxHeapSize "4g"
+  }
 
   defaultConfig {
     minSdkVersion 15
 //    targetSdkVersion 15
     targetSdkVersion 23
 
-//    multiDexEnabled true
-//    testInstrumentationRunner "com.android.test.runner.MultiDexTestRunner"
+    multiDexEnabled true
+    testInstrumentationRunner "com.android.test.runner.MultiDexTestRunner"
   }
 
   lintOptions {
