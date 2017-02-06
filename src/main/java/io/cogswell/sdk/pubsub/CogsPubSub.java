@@ -2,6 +2,8 @@ package io.cogswell.sdk.pubsub;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
+import io.cogswell.sdk.pubsub2.PubSubHandle;
+
 public class CogsPubSub {
     /**
      * Open a connection to the Cogswell Pub/Sub system.
@@ -13,6 +15,6 @@ public class CogsPubSub {
      * for interacting with the server
      */
     public static ListenableFuture<PubSubHandle> connect(String[] keys, PubSubOptions options) {
-        return PubSubHandle.connect(keys, options);
+        return null;//PubSubHandle.connect(keys, options);
     }
 }

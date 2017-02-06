@@ -19,7 +19,9 @@ import java.net.InetAddress;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 
 import io.cogswell.sdk.Auth;
 import io.cogswell.sdk.Methods;
@@ -81,11 +83,10 @@ public class CogsPubSubWebSocketTest extends TestCase {
     private Headers buildHeaders() throws Auth.AuthKeyError {
 
         // Valid QA keys:
-        String[] keys = {
-            "A-*-*",
-            "R-*-*",
-            "W-*-*"
-        };
+        List<String> keys = new ArrayList<>();
+        keys.add("A-*-*");
+        keys.add("R-*-*");
+        keys.add("W-*-*");
 
         Headers headers = new Headers();
         Auth.PayloadHeaders ph = Auth.socketAuth(keys);

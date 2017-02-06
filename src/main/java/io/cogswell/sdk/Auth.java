@@ -82,8 +82,8 @@ public class Auth {
      * @return the auth hmac
      * @throws AuthKeyError
      */
-    public static PayloadHeaders socketAuth(String[] keys) throws AuthKeyError {
-        if (keys == null || keys.length == 0) {
+    public static PayloadHeaders socketAuth(List<String> keys) throws AuthKeyError {
+        if (keys == null || keys.size() == 0) {
             throw new AuthKeyError("No keys supplied.");
         }
         // NOTE: For backward compatibility, we cannot use Java's map/reduce streams.
@@ -107,31 +107,25 @@ public class Auth {
 
         String payload = String.format(
             "{"+
-                    "\"identity\":\"%s\","+
-                    "\"permissions\":\"%s\","+
-                    "\"security_timestamp\":\"%s\""+
+                "\"identity\":\"%s\","+
+                "\"permissions\":\"%s\","+
+                "\"security_timestamp\":\"%s\""+
              "}",
              identity, perms, timeISO8601);
 
         // Compute and xor the hmacs.
         byte[] hmacXored = new byte[32];
-        for (Key key : permissionToKeyMap.values()) {
-            try {
+        try {
+            for (Key key : permissionToKeyMap.values()) {
                 String hmac = Methods.getHmac(payload, key.permKey);
-
                 byte[] hmacHex = Hex.decodeHex(hmac.toCharArray());
                 mutateXor(hmacXored, hmacHex);
-            } catch (NoSuchAlgorithmException | UnsupportedEncodingException | InvalidKeyException | DecoderException e) {
-                throw new AuthKeyError( e );
             }
-        }
-
-        try {
             String payloadBase64 = Base64.encodeToString(payload.getBytes("UTF-8"), Base64.NO_WRAP);
             String payloadHmac = new String(Hex.encodeHex(hmacXored));
             PayloadHeaders ph = new PayloadHeaders(payloadBase64, payloadHmac);
             return ph;
-        } catch (UnsupportedEncodingException e) {
+        } catch (NoSuchAlgorithmException | UnsupportedEncodingException | InvalidKeyException | DecoderException e) {
             throw new AuthKeyError( e );
         }
     }
