@@ -89,7 +89,7 @@ public class CogsPubSubWebSocketTest extends TestCase {
         keys.add("W-*-*");
 
         Headers headers = new Headers();
-        Auth.PayloadHeaders ph = Auth.socketAuth(keys);
+        Auth.PayloadHeaders ph = Auth.socketAuth(keys, null);
         headers.add("Host" , "gamqa-api.aviatainc.com");
         headers.add("Payload" , ph.payloadBase64);
         headers.add("PayloadHMAC" , ph.payloadHmac);

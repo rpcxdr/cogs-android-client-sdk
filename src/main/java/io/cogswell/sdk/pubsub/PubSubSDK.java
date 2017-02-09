@@ -9,6 +9,7 @@ import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 
 //import java.util.concurrent.CompletionException;
@@ -16,6 +17,7 @@ import com.google.common.util.concurrent.SettableFuture;
 import org.json.JSONObject;
 
 import java.util.List;
+import java.util.concurrent.Executor;
 
 import io.cogswell.sdk.Auth;
 import io.cogswell.sdk.pubsub.PubSubHandle;
@@ -58,26 +60,32 @@ public class PubSubSDK {
     }
 
     /**
-     * Creates a connection with the given project keys, and the given {@link PubSubOptions}
+     * Creates a connection with the given project keys, and the given {@link PubSubOptions}.
+     * This will use MoreExecutors.directExecutor() for execution of internal threads.
      * @param projectKeys The list of requested keys for the connection to be established
      * @param options The {@link PubSubOptions} to use for the connection to be established
      * @return CompletableFuture<PubSubHandle> future that will contain {@PubSubHandle} used for making SDK requests 
      */
     public ListenableFuture<PubSubHandle> connect(List<String> projectKeys, PubSubOptions options) {
-        try {
-            ListenableFuture<PubSubSocket> connectFuture = PubSubSocket.connectSocket(projectKeys, options);
-            Function<PubSubSocket, PubSubHandle> getSessionFunction =
+        return connect(projectKeys, options, MoreExecutors.directExecutor());
+    }
+
+    /**
+     * Creates a connection with the given project keys, and the given {@link PubSubOptions}
+     * @param projectKeys The list of requested keys for the connection to be established
+     * @param options The {@link PubSubOptions} to use for the connection to be established
+     * @param executor The executor used for internal threads.
+     * @return CompletableFuture<PubSubHandle> future that will contain {@PubSubHandle} used for making SDK requests
+     */
+    public ListenableFuture<PubSubHandle> connect(List<String> projectKeys, PubSubOptions options, Executor executor) {
+        ListenableFuture<PubSubSocket> connectFuture = PubSubSocket.connectSocket(projectKeys, options, executor);
+        Function<PubSubSocket, PubSubHandle> getSessionFunction =
                 new Function<PubSubSocket, PubSubHandle>() {
                     public PubSubHandle apply(PubSubSocket pubSubSocket) {
                         return new PubSubHandle(pubSubSocket, 0L);
                     }
                 };
-            ListenableFuture<PubSubHandle> getHandleFuture = Futures.transform(connectFuture, getSessionFunction);
-            return getHandleFuture;
-        } catch (Auth.AuthKeyError e) {
-            SettableFuture<PubSubHandle> failedFuture = SettableFuture.create();
-            failedFuture.setException(e);
-            return failedFuture;
-        }
+        ListenableFuture<PubSubHandle> getHandleFuture = Futures.transform(connectFuture, getSessionFunction);
+        return getHandleFuture;
     }
 }

@@ -33,10 +33,10 @@ public class PubSubOptions {
      * Initializes this PubSubOptions with all default values
      */
     public PubSubOptions () {
-        this("wss://api.cogswell.io/pubsub", false, 30000L, null);
+        this("wss://api.cogswell.io/pubsub", true, 30000L, null);
     }
     public PubSubOptions (String url) {
-        this(url, false, 30000L, null);
+        this(url, true, 30000L, null);
     }
 
     /**

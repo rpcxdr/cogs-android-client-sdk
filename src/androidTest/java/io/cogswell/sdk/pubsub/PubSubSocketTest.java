@@ -16,11 +16,13 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
 import io.cogswell.sdk.pubsub.handlers.PubSubCloseHandler;
+import io.cogswell.sdk.pubsub.handlers.PubSubNewSessionHandler;
 import io.cogswell.sdk.pubsub.handlers.PubSubReconnectHandler;
 
 public class PubSubSocketTest extends TestCase {
@@ -40,7 +42,6 @@ public class PubSubSocketTest extends TestCase {
 
         final CountDownLatch signal = new CountDownLatch(1);
         Object result = null;
-
 
         ListenableFuture<PubSubSocket> connectFuture = PubSubSocket.connectSocket(keys, new PubSubOptions("https://gamqa-api.aviatainc.com/pubsub"));
 
@@ -101,7 +102,7 @@ public class PubSubSocketTest extends TestCase {
     }
 
     public void testReconnect() throws Exception {
-        final Map<String,Object> responses = new HashMap<String, Object>();
+        final Map<String,Object> responses = new HashMap<>();
         final CountDownLatch signalClosed = new CountDownLatch(1);
         final CountDownLatch signalReconnected = new CountDownLatch(1);
         final long seqNum = 123;
@@ -123,6 +124,12 @@ public class PubSubSocketTest extends TestCase {
                 signalReconnected.countDown();
             }
         };
+        final PubSubNewSessionHandler pubSubNewSessionHandler = new PubSubNewSessionHandler() {
+            @Override
+            public void onNewSession(UUID uuid) {
+                responses.put("onNewSession", uuid);
+            }
+        };
 
         PubSubOptions pubSubOptions = new PubSubOptions("https://gamqa-api.aviatainc.com/pubsub", true, 30000L, null);
         ListenableFuture<PubSubSocket> connectFuture = PubSubSocket.connectSocket(keys, pubSubOptions);
@@ -130,8 +137,9 @@ public class PubSubSocketTest extends TestCase {
         Futures.addCallback(connectFuture, new FutureCallback<PubSubSocket>() {
             public void onSuccess(PubSubSocket pubsubSocket) {
                 responses.put("pubsubSocket", pubsubSocket);
-                pubsubSocket.addCloseHandler(closeHandler);
-                pubsubSocket.addReconnectHandler(reconnectHandler);
+                pubsubSocket.setCloseHandler(closeHandler);
+                pubsubSocket.setReconnectHandler(reconnectHandler);
+                pubsubSocket.setNewSessionHandler(pubSubNewSessionHandler);
 
                 // Force an unplanned closing.
                 pubsubSocket.onCompleted(expectedConnectionException);
@@ -152,6 +160,75 @@ public class PubSubSocketTest extends TestCase {
         signalReconnected.await(asyncTimeoutSeconds, TimeUnit.SECONDS);
 
         assertEquals(true, responses.get("onReconnect"));
+        assertTrue(responses.get("onNewSession") == null);
+    }
+
+
+    public void testReconnectWithSessionUuidChange() throws Exception {
+        final Map<String,Object> responses = new HashMap<>();
+        final CountDownLatch signalClosed = new CountDownLatch(1);
+        final CountDownLatch signalReconnected = new CountDownLatch(1);
+        final long seqNum = 123;
+        final Exception expectedConnectionException = new Exception();
+        final UUID forcedChangeToUuidToTriggerNotification = UUID.randomUUID();
+        final JSONObject getSessionRequest = new JSONObject()
+                .put("seq", seqNum)
+                .put("action", "session-uuid");
+        final PubSubCloseHandler closeHandler = new PubSubCloseHandler() {
+            @Override
+            public void onClose(Throwable error) {
+                responses.put("onCloseError", error);
+                signalClosed.countDown();
+            }
+        };
+        final PubSubReconnectHandler reconnectHandler = new PubSubReconnectHandler() {
+            @Override
+            public void onReconnect() {
+                responses.put("onReconnect", true);
+                signalReconnected.countDown();
+            }
+        };
+        final PubSubNewSessionHandler pubSubNewSessionHandler = new PubSubNewSessionHandler() {
+            @Override
+            public void onNewSession(UUID uuid) {
+                responses.put("onNewSession", uuid);
+            }
+        };
+
+        PubSubOptions pubSubOptions = new PubSubOptions("https://gamqa-api.aviatainc.com/pubsub", true, 30000L, null);
+        ListenableFuture<PubSubSocket> connectFuture = PubSubSocket.connectSocket(keys, pubSubOptions);
+
+        Futures.addCallback(connectFuture, new FutureCallback<PubSubSocket>() {
+            public void onSuccess(PubSubSocket pubsubSocket) {
+                responses.put("pubsubSocket", pubsubSocket);
+                responses.put("pubsubSocket.sessionUuid", pubsubSocket.getSessionUuid());
+                pubsubSocket.setCloseHandler(closeHandler);
+                pubsubSocket.setReconnectHandler(reconnectHandler);
+                pubsubSocket.setNewSessionHandler(pubSubNewSessionHandler);
+
+                // Force an unplanned closing.
+                pubsubSocket.onCompleted(expectedConnectionException);
+                // Force a session UUID change notification
+                pubsubSocket.setSessionUuid(forcedChangeToUuidToTriggerNotification);
+            }
+            public void onFailure(Throwable error) {
+                Log.e("TEST","Error:",error);
+                responses.put("pubsubSocket", error);
+            }
+        }, executor);
+
+        // Wait until the closeHandler function is called.
+        signalClosed.await(asyncTimeoutSeconds, TimeUnit.SECONDS);
+
+        assertTrue(responses.get("onCloseError") instanceof Throwable);
+        assertEquals(expectedConnectionException, responses.get("onCloseError"));
+
+        // Wait until the reconnectHandler function is called.
+        signalReconnected.await(asyncTimeoutSeconds, TimeUnit.SECONDS);
+
+        assertEquals(true, responses.get("onReconnect"));
+        // The client uuid before the reset (pubsubSocket.sessionUuid) sholud match the client uuid after the reset (onNewSession)
+        assertEquals(responses.get("pubsubSocket.sessionUuid"), responses.get("onNewSession"));
     }
 
 }

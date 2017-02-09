@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
+import java.util.UUID;
 
 public class Auth {
     private static final String validKeyParts = "RWA";
@@ -79,10 +80,11 @@ public class Auth {
      * Compute the auth hmac for the specified keys.
      *
      * @param keys
+     * @param sessionUuid If not null, this will be added to the header payload attribute session_uuid.
      * @return the auth hmac
      * @throws AuthKeyError
      */
-    public static PayloadHeaders socketAuth(List<String> keys) throws AuthKeyError {
+    public static PayloadHeaders socketAuth(List<String> keys, UUID sessionUuid) throws AuthKeyError {
         if (keys == null || keys.size() == 0) {
             throw new AuthKeyError("No keys supplied.");
         }
@@ -103,13 +105,21 @@ public class Auth {
 
         // All key identities sholud be the same, so just get the first one.
         String identity = permissionToKeyMap.values().iterator().next().identity;
-        String timeISO8601 = iso8601Format.format(new Date());;
+        String timeISO8601 = iso8601Format.format(new Date());
+
+        String sessionUuidJSONFragment;
+        if (sessionUuid!=null) {
+            sessionUuidJSONFragment = ",\"session_uuid\":\""+sessionUuid.toString()+"\"";
+        } else {
+            sessionUuidJSONFragment = "";
+        }
 
         String payload = String.format(
             "{"+
-                "\"identity\":\"%s\","+
-                "\"permissions\":\"%s\","+
-                "\"security_timestamp\":\"%s\""+
+                "\"identity\":\"%s\"," +
+                "\"permissions\":\"%s\"," +
+                "\"security_timestamp\":\"%s\"" +
+                sessionUuidJSONFragment +
              "}",
              identity, perms, timeISO8601);
 

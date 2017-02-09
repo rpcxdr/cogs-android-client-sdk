@@ -14,9 +14,9 @@ public class Utils {
 
     public static Calendar toCalendar(String dateString) {
         try {
-            // Android does not support the X timezone flag: http://stackoverflow.com/questions/28373610/android-parse-string-to-date-unknown-pattern-character-x
-
-            //https://code.google.com/p/android/issues/detail?id=8258
+            // NOTE: Android does not support the X timezone flag.  See:
+            // * http://stackoverflow.com/questions/28373610/android-parse-string-to-date-unknown-pattern-character-x
+            // * https://code.google.com/p/android/issues/detail?id=8258
             Calendar calendar = GregorianCalendar.getInstance();
             String s = dateString.replace("Z", "+0000");
             Date date = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ").parse(s);

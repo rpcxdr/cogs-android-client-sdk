@@ -15,7 +15,7 @@ public class AuthTest extends TestCase {
         keys.add("R-*-*");
         keys.add("W-*-*");
 
-        Auth.socketAuth(keys);
+        Auth.socketAuth(keys, null);
     }
 
 }

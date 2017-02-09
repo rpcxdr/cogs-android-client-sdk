@@ -17,6 +17,7 @@ import com.koushikdutta.async.http.AsyncHttpRequest;
 import com.koushikdutta.async.http.Headers;
 import com.koushikdutta.async.http.WebSocket;
 
+import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -48,24 +49,28 @@ import io.cogswell.sdk.subscription.CogsMessage;
  */
 public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.WebSocketConnectCallback, CompletedCallback
 {
-    private static Executor executor = MoreExecutors.directExecutor();
+    private Executor executor;
 
     public static ListenableFuture<PubSubSocket> connectSocket(List<String> projectKeys)
     {
+        return connectSocket(projectKeys, PubSubOptions.DEFAULT_OPTIONS, MoreExecutors.directExecutor());
+    }
+
+    public static ListenableFuture<PubSubSocket> connectSocket(List<String> projectKeys, PubSubOptions options)
+    {
+        return connectSocket(projectKeys, options, MoreExecutors.directExecutor());
+    }
+
+    public static ListenableFuture<PubSubSocket> connectSocket(List<String> projectKeys, PubSubOptions options, Executor executor)
+    {
         try {
-            return connectSocket(projectKeys, PubSubOptions.DEFAULT_OPTIONS);
+            PubSubSocket socket = new PubSubSocket(projectKeys, options, executor);
+            return socket.connect();
         } catch (Auth.AuthKeyError e) {
             SettableFuture<PubSubSocket> result = SettableFuture.create();
             result.setException(e);
             return result;
         }
-    }
-
-    public static ListenableFuture<PubSubSocket> connectSocket(List<String> projectKeys, PubSubOptions options)
-            throws Auth.AuthKeyError
-    {
-        PubSubSocket socket = new PubSubSocket(projectKeys, options);
-        return socket.connect();
     }
 
     /**
@@ -119,6 +124,16 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
      * Holds the next delay to wait when an attempted reconnect fails
      */
     private AtomicLong autoReconnectDelay;
+
+    /**
+     * Holds the current session uuid from the Pub/Sub server
+     */
+    private UUID sessionUuid;
+
+    /**
+     * Holds whether the most recent session UUID meant that a new session was generated
+     */
+    private AtomicBoolean isNewSession;
 
     /**
      * Maps each outstanding request to the server by their sequence number 
@@ -178,7 +193,7 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
      * Creates a minimal PubSubSocket, used for testing purposes
      */
     protected PubSubSocket() {
-        this(null, PubSubOptions.DEFAULT_OPTIONS);
+        this(null, PubSubOptions.DEFAULT_OPTIONS, MoreExecutors.directExecutor());
         this.autoReconnectDelay = new AtomicLong(DEFAULT_RECONNECT_DELAY);
     }
 
@@ -198,20 +213,23 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
      * @param options The options requested for the connection represented by this PubSubSocket
      * @throws IOException
      */
-    public PubSubSocket(List<String> projectKeys, PubSubOptions options)
+    public PubSubSocket(List<String> projectKeys, PubSubOptions options, Executor executor)
     {
+        this.projectKeys = projectKeys;
+        this.options = options;
+        this.executor = executor;
+
+        this.sessionUuid = options.getSessionUuid();
+        this.autoReconnectDelay = new AtomicLong(options.getConnectTimeout());
+        this.autoReconnect = new AtomicBoolean(options.getAutoReconnect());
+
+        this.isConnected = new AtomicBoolean(false);
         this.isSetupInProgress = new AtomicBoolean(false);
         this.setupFuture = null;
 
-
-        this.projectKeys = projectKeys;
         this.msgHandlers = Collections.synchronizedMap(new Hashtable<String, PubSubMessageHandler>());
         this.outstanding = Collections.synchronizedMap(new Hashtable<Long, SettableFuture<JSONObject>>());
 
-        this.autoReconnectDelay = new AtomicLong(options.getConnectTimeout());
-        this.autoReconnect = new AtomicBoolean(options.getAutoReconnect());
-        this.isConnected = new AtomicBoolean(false);
-        this.options = options;
     }
 
     /**
@@ -266,12 +284,17 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
      */
     private ListenableFuture<PubSubSocket> connect() throws Auth.AuthKeyError {
 
-        // Only allow one reconnect at a time.  Do nothing if we are already reconnecting.
-        if (isSetupInProgress.compareAndSet(false, true)) {
+        // Only allow one connect at a time.  Do nothing if we are already connecting.
+        if (isSetupInProgress.compareAndSet(false, true) || setupFuture == null) {
             setupFuture = SettableFuture.create();
             Headers headers = new Headers();
-            Auth.PayloadHeaders ph = Auth.socketAuth(projectKeys);
-            headers.add("Host", "gamqa-api.aviatainc.com");
+
+            if (sessionUuid != null) {
+                Log.d("Cogs-SDK", "connect() attempting to re-establish session with uuid ["+sessionUuid+"]");
+            }
+
+            Auth.PayloadHeaders ph = Auth.socketAuth(projectKeys, sessionUuid);
+            headers.add("Host", options.getUri().getHost());
             headers.add("Payload", ph.payloadBase64);
             headers.add("PayloadHMAC", ph.payloadHmac);
 
@@ -291,44 +314,22 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
      * @throws Auth.AuthKeyError Contains the auth cause of being unable to reconnect, if such occurs
      */
     private ListenableFuture<PubSubSocket> reconnect() throws Auth.AuthKeyError {
+        // Connect, then call the reconnectHandler, then, if we are doing auto-reconnect, get the session UUID.
         ListenableFuture<PubSubSocket> connectFuture = connect();
-        AsyncFunction<PubSubSocket, PubSubSocket> reconnectHandlerFunction =
-                new AsyncFunction<PubSubSocket, PubSubSocket>() {
-                    public ListenableFuture<PubSubSocket> apply(PubSubSocket connectResponse) {
+        Function<PubSubSocket, PubSubSocket> reconnectHandlerFunction =
+                new Function<PubSubSocket, PubSubSocket>() {
+                    public PubSubSocket apply(PubSubSocket connectResponse) {
                         Log.d("Cogs-SDK", "reconnect() connection established.");
-                        reconnectHandler.onReconnect();
-
-                        //if (options.getAutoReconnect()) {
-                        //    SettableFuture<PubSubSocket> new PubSubHandle(PubSubSocket.this, -1L).getSessionUuid();
-                        //} else {
-                            SettableFuture<PubSubSocket> result = SettableFuture.create();
-                            result.set(connectResponse);
-                            return result;
-                        //}
-
+                        if (reconnectHandler != null) {
+                            reconnectHandler.onReconnect();
+                        }
+                        return connectResponse;
                     }
                 };
-        ListenableFuture<PubSubSocket> reconnectHandlerFuture = Futures.transformAsync(connectFuture, reconnectHandlerFunction, executor);
+        ListenableFuture<PubSubSocket> reconnectHandlerFuture = Futures.transform(connectFuture, reconnectHandlerFunction, executor);
 
         return reconnectHandlerFuture;
     }
-
-    /*
-    private CompletableFuture<Void> reconnect() {
-        return connect()
-            .thenAcceptAsync((invalid) -> {
-                if(reconnectHandler != null) {
-                    reconnectHandler.onReconnect();
-                }
-            })
-            .exceptionally((error) -> {
-                if(errorHandler != null) {
-                    errorHandler.onError(error, null, null);
-                }
-
-                throw new CompletionException(error);
-            });
-    }*/
 
     ///////////////////// EXTENDING ENDPOINT AND IMPLEMENTING MESSAGE_HANDLER ///////////////////// 
 
@@ -359,12 +360,35 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
                 }
             });
 
-            //currentHandler().connected();
-            setupFuture.set(PubSubSocket.this);
-            isConnected.set(true);
+            if (!autoReconnect.get()) {
+                //currentHandler().connected();
+                setupFuture.set(PubSubSocket.this);
+                isConnected.set(true);
+            } else {
+                // If we are auto-reconnecting, get the uuid, and notify the newSessionHandler if it has changed.
+                ListenableFuture<UUID> getSessionUuidFuture = new PubSubHandle(PubSubSocket.this, -1L).getSessionUuid();
 
-            if(autoReconnect.get()) {
+                Futures.addCallback(getSessionUuidFuture, new FutureCallback<UUID>() {
+                    public void onSuccess(UUID getSessionUuidResponse) {
 
+                        Log.d("Cogs-SDK", "Comparing client uuid["+PubSubSocket.this.sessionUuid+"] with server uuid["+getSessionUuidResponse+"]");
+
+                        // If there was a uuid change, notify the listener.
+                        if (!getSessionUuidResponse.equals(PubSubSocket.this.sessionUuid)) {
+                            PubSubSocket.this.sessionUuid = getSessionUuidResponse;
+                            if (PubSubSocket.this.newSessionHandler != null) {
+                                PubSubSocket.this.newSessionHandler.onNewSession(getSessionUuidResponse);
+                            }
+                        }
+                        setupFuture.set(PubSubSocket.this);
+                        isConnected.set(true);
+                    }
+                    public void onFailure(Throwable error) {
+                        // This will trigger another reconnect attempt.
+                        setupFuture.setException(error);
+                        isConnected.set(false);
+                    }
+                }, executor);
             }
         }
     }
@@ -391,78 +415,24 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
         if(closeHandler != null) {
             closeHandler.onClose(closeReason);
         }
-/*
+
         if (closeReason != null) {
             Log.e("Cogs-SDK", "Error caused WebSocket to close.", closeReason);
         } else {
-            Log.i("Cogs-SDK", "WebSocket closed without error.");
+            Log.d("Cogs-SDK", "WebSocket closed without error.");
         }
-*/
 
         if(options.getAutoReconnect() == true) {
             Log.d("Cogs-SDK", "Lost connection.  Attempting reconnect.", closeReason);
             reconnectRetry(0);
-            /*
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    do {
-                        previousDelay = autoReconnectDelay.get();
-                        minimumDelay = Math.max(DEFAULT_RECONNECT_DELAY, previousDelay);
-                        nextDelay = Math.min(minimumDelay, MAX_RECONNECT_DELAY) * 2;
-                        autoReconnectDelay.set(nextDelay);
-                    } while(isConnected.get() != true && autoReconnectDelay.get() < MAX_RECONNECT_DELAY);
-
-                }
-            }).start();
-            /*
-            do {
-                try {
-                    reconnect();
-                }
-                catch(Exception e) {
-                    Utils.setTimeout( new Runnable() {
-                        public void run(){
-                            try {
-                                PubSubSocket.this.reconnect();
-                            } catch (Auth.AuthKeyError ake) {
-                                Log.e("Cogs-SDK","Auth error when reconnecting", ake);
-                            }
-                        }
-                    }, autoReconnectDelay.get());
-
-                    previousDelay = autoReconnectDelay.get();
-                    minimumDelay = Math.max(DEFAULT_RECONNECT_DELAY, previousDelay);
-                    nextDelay = Math.min(minimumDelay, MAX_RECONNECT_DELAY) * 2;
-                    autoReconnectDelay.set(nextDelay);
-                }
-            } while(isConnected.get() != true && autoReconnectDelay.get() < MAX_RECONNECT_DELAY);
-            /*
-            Log.d("Cogs-SDK", "Lost connection.  Attempting reconnect.", closeReason);
-            do {
-                try {
-                    reconnect();
-                }
-                catch(Exception e) {
-                    Utils.setTimeout( new Runnable() {
-                        public void run(){
-                            try {
-                                PubSubSocket.this.reconnect();
-                            } catch (Auth.AuthKeyError ake) {
-                                Log.e("Cogs-SDK","Auth error when reconnecting", ake);
-                            }
-                        }
-                    }, autoReconnectDelay.get());
-
-                    previousDelay = autoReconnectDelay.get();
-                    minimumDelay = Math.max(DEFAULT_RECONNECT_DELAY, previousDelay);
-                    nextDelay = Math.min(minimumDelay, MAX_RECONNECT_DELAY) * 2;
-                    autoReconnectDelay.set(nextDelay);
-                }
-            } while(isConnected.get() != true && autoReconnectDelay.get() < MAX_RECONNECT_DELAY);
-            */
         }
     }
+
+    /**
+     * Wait the specified time, attempt to reconnect, then, if there is a failure, call reconnectRetry again.
+     *
+     * @param msUntilNextRetry
+     */
     private void reconnectRetry(final long msUntilNextRetry) {
         Log.d("Cogs-SDK", "Attempting reconnect in "+msUntilNextRetry+"ms.");
         Utils.setTimeout( new Runnable() {
@@ -479,12 +449,9 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
 
                             long minimumDelay = Math.max(DEFAULT_RECONNECT_DELAY, msUntilNextRetry);
                             long nextDelay = Math.min(minimumDelay * 2, MAX_RECONNECT_DELAY);
-                            // TODO: PUB-238
-                            //if (nextDelay<MAX_RECONNECT_DELAY) {
-                                reconnectRetry(nextDelay);
-                            //} else {
-                            //    Log.e("Cogs-SDK", "Max reconnect attempts reached.  Stopping retries.");
-                            //}
+
+                            // Attempt reconnecting forever.
+                            reconnectRetry(nextDelay);
                         }
                     }, executor);
                 } catch (Auth.AuthKeyError ake) {
@@ -571,10 +538,26 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
     }
 
     /**
+     * Set the session ID.  This protected method is to be used for testing only.
+     * @param sessionUuid
+     */
+    protected void setSessionUuid(UUID sessionUuid) {
+        this.sessionUuid = sessionUuid;
+    }
+
+    /**
+     * Get the session ID.  This protected method is to be used for testing only.
+     * @return sessionUuid
+     */
+    protected UUID getSessionUuid() {
+        return sessionUuid;
+    }
+
+    /**
      * Registers a handler to call whenever a new session is generated by the server
      * @param handler The handler to call
      */
-    public void addNewSessionHandler(PubSubNewSessionHandler handler) {
+    public void setNewSessionHandler(PubSubNewSessionHandler handler) {
         newSessionHandler = handler;
     }
 
@@ -582,7 +565,7 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
      * Registers a handler that will be called any time the underlying socket must be reconnected
      * @param handler The handler to register for the reconnects
      */
-    public void addReconnectHandler(PubSubReconnectHandler handler) {
+    public void setReconnectHandler(PubSubReconnectHandler handler) {
         reconnectHandler = handler;
     }
 
@@ -590,7 +573,7 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
      * Register a handler to call whenever a raw record (string json) is received from the server.
      * @param handler The handler to register
      */
-    public void addRawRecordHandler(PubSubRawRecordHandler handler) {
+    public void setRawRecordHandler(PubSubRawRecordHandler handler) {
         rawRecordHandler = handler;
     }
 
@@ -598,7 +581,7 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
      * Registers a handler to call if there are failures working with the underlying socket
      * @param handler The handler to register
      */
-    public void addErrorHandler(PubSubErrorHandler handler) {
+    public void setErrorHandler(PubSubErrorHandler handler) {
         errorHandler = handler;
     }
 
@@ -606,7 +589,7 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
      * Registers a handler to call if there are failures working with server responses.
      * @param handler The handler to register
      */
-    private void addResponseErrorHandler(PubSubErrorHandler handler) {
+    private void setResponseErrorHandler(PubSubErrorHandler handler) {
         responseErrorHandler = handler;
     }
 
@@ -614,7 +597,7 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
      * Register a handler to call whenever the underlying socket is actually closed.
      * @param handler The handler to register
      */
-    public void addCloseHandler(PubSubCloseHandler handler) {
+    public void setCloseHandler(PubSubCloseHandler handler) {
         closeHandler = handler;
     }
 
