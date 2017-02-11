@@ -23,15 +23,17 @@ import com.google.common.base.Function;
 import io.cogswell.sdk.pubsub.handlers.*;
 
 /**
- * Users of the SDK receive an instance of this class when connecting to Pub/Sub.
- * All Pub/Sub operations available to users of the SDK are made through an instance of this class.
+ * Represents user endpoint to Cogswell Pub/Sub and provides methods to perform available Pub/Sub operations.
  */
 public class PubSubHandle {
     private AtomicLong sequence;
     private PubSubSocket socket;
 
     /**
-     * Construct a handle that uses the given {@link PubSubSocket} to connect to the Pub/Sub system
+     * Creates an endpoint to Cogswell Pub/Sub using the given {@link PubSubSocket} as the underlying connection.
+     *
+     * @param socket {@link PubSubSocket} which contains the underlying connection to Cogswell Pub/Sub
+     * @param initialSequenceNumber The initial sequence number to be used.
      */
     protected PubSubHandle(PubSubSocket socket, Long initialSequenceNumber) {
         this.sequence = new AtomicLong(initialSequenceNumber);
@@ -51,7 +53,7 @@ public class PubSubHandle {
      * @param <T> The expected result type.
      * @return A future with the result of a call to jsonreader.
      */
-    private <T> ListenableFuture<T> sendJSON(final JSONReaderFunction<T> jsonreader, final boolean isAwaitingServerResponse, Object ... nameValuePairs) {
+    private <T> ListenableFuture<T> sendJSON(final JSONReaderFunction<T> jsonreader, final boolean isAwaitingServerResponse, final PubSubErrorHandler serverErrorHandler, Object ... nameValuePairs) {
         final SettableFuture<T> outcome = SettableFuture.create();
         long seq = sequence.getAndIncrement();
 
@@ -63,7 +65,7 @@ public class PubSubHandle {
                 request.put((String)nameValuePairs[i], nameValuePairs[i+1]);
             }
 
-            ListenableFuture<JSONObject> getSessionFuture = socket.sendRequest(seq, request, isAwaitingServerResponse);
+            ListenableFuture<JSONObject> getSessionFuture = socket.sendRequest(seq, request, isAwaitingServerResponse, serverErrorHandler);
 
             Futures.addCallback(getSessionFuture, new FutureCallback<JSONObject>() {
                 public void onSuccess(JSONObject json) {
@@ -88,7 +90,7 @@ public class PubSubHandle {
     }
 
     /**
-     * Request the UUID of the current session/connection with the Pub/Sub system.
+     * Fetches UUID of current session, which enables caching if caching is enabled on the project.
      * @return ListenableFuture<UUID> Future that completes with Session UUID on success, and with error otherwise
      */
     public ListenableFuture<UUID> getSessionUuid() {
@@ -98,15 +100,15 @@ public class PubSubHandle {
             public UUID apply(JSONObject json) throws JSONException {
                 return UUID.fromString(json.getString("uuid"));
             }
-        }, true, "action", "session-uuid");
+        }, true, null, "action", "session-uuid");
     }
 
     /**
-     * Subscribe to the given channel, and process messages from channel with the given {@link PubSubMessageHandler}.
-     * THe provided handler cannot be null.
-     * @param channel The name of the channel to which to subscribe
-     * @param messageHandler The handler which will handle Pub/Sub messages received on the given channel
-     * @return ListenableFuture<List<String>> Future completing with list of subscriptions on success, error otherwise
+     * Subscribe to the given {@code channel}, and process messages from {@code channel} using the provided {@link PubSubMessageHandler}.
+     *
+     * @param channel The name of the channel to which to subscribe.
+     * @param messageHandler Handler that receives message from {@code channel}. May NOT be null.
+     * @return ListenableFuture<List<String>> Completes with list of all current subscriptions on success.
      */
     public ListenableFuture<List<String>> subscribe(String channel, PubSubMessageHandler messageHandler) {
         socket.setMessageHandler(channel, messageHandler);
@@ -122,14 +124,14 @@ public class PubSubHandle {
                 }
                 return channels;
             }
-        }, true, "action", "subscribe", "channel", channel);
+        }, true, null, "action", "subscribe", "channel", channel);
     }
 
     /**
      * Unsubscribes from {@code channel} which stops receipt and handling of messages for {@code channel}.
      *
      * @param channel Name of the channel from which to unsubscribe.
-     * @return ListenableFuture<List<String>> Future completing with list of all remaining subscriptions on success.
+     * @return ListenableFuture<List<String>> Completes with list of all remaining subscriptions on success.
      */
     public ListenableFuture<List<String>> unsubscribe(final String channel) {
         return sendJSON(new JSONReaderFunction<List<String>>() {
@@ -146,12 +148,12 @@ public class PubSubHandle {
 
                 return channels;
             }
-        }, true, "action", "unsubscribe", "channel", channel);
+        }, true, null, "action", "unsubscribe", "channel", channel);
     }
     
     /**
-     * Unsubscribe from all current channel subscriptions
-     * @return ListenableFuture<List<String>> Future completing with list of all unsubscribed channels, error otherwise
+     * Unsubscribes from all channels.   This will stop receipt and handling of messages from all channels.
+     * @return ListenableFuture<List<String>> Completes with list of all unsubscribed channels.
      */
     public ListenableFuture<List<String>> unsubscribeAll() {
         return sendJSON(new JSONReaderFunction<List<String>>() {
@@ -165,12 +167,12 @@ public class PubSubHandle {
                 }
                 return channels;
             }
-        }, true, "action", "unsubscribe-all");
+        }, true, null, "action", "unsubscribe-all");
     }
 
     /**
-     * Request a list of current subscriptions for the connection
-     * @return ListenableFuture<List<String>> Future completing with list of subscriptions on success, error otherwise
+     * Fetches list of all current subscriptions.
+     * @return ListenableFuture<List<String>> Completes with list of all current subscriptions on success.
      */
     public ListenableFuture<List<String>> listSubscriptions() {
         return sendJSON(new JSONReaderFunction<List<String>>() {
@@ -184,34 +186,48 @@ public class PubSubHandle {
                 }
                 return channels;
             }
-        }, true, "action", "subscriptions");
+        }, true, null, "action", "subscriptions");
     }
 
     /**
-     * Publish the given message to the given channel. Note that the ListenableFuture returned by this method
-     * indicates success in actually sending the message, but provides no information about whether the message
-     * was received. This is unlike the other methods, which return futures with the results from the server.
-     * @param channel The name of the channel on which to publish the given message.
-     * @param message The actual content of the message to publish on the given channel.
-     * //@param handler An error handler that is called if sending fails
-     * @return ListenableFuture<Long> Future completed with sequence of message on successful send, error otherwise
+     * Publishes {@code message} to {@code channel} without acknowledgement that the message was actually published.
+     * Note: Completion of the returned CompletableFuture indicates success only in sending the message.
+     *       This method gives no information and no guarantees that the message was actually published.
+     *
+     * @param channel Name of the channel on which to publish the message.
+     * @param message Content of the message to be publish on the given channel.
+     * @return ListenableFuture<Long> Completes with the sequence number of the request on a successful send.
      */
     public ListenableFuture<Long> publish(String channel, String message) {
+        return publish(channel, message, null);
+    }
+
+    /**
+     * Publishes {@code message} to {@code channel} without acknowledgement that the message was actually published.
+     * Note: Completion of the returned CompletableFuture indicates success only in sending the message.
+     *       This method gives no information and no guarantees that the message was actually published.
+     *
+     * @param channel Name of the channel on which to publish the message.
+     * @param message Content of the message to be publish on the given channel.
+     * @param handler Error handler called if the server reports an error within 30 seconds of sending.
+     * @return ListenableFuture<Long> Completes with the sequence number of the request on a successful send.
+     */
+    public ListenableFuture<Long> publish(String channel, String message, PubSubErrorHandler handler) {
         return sendJSON(new JSONReaderFunction<Long>() {
             @Override
             public Long apply(JSONObject json) throws JSONException {
                 Long seq = json.getLong("seq");
                 return seq;
             }
-        }, false, "action", "pub", "chan", channel, "msg", message, "ack", false);
+        }, false, handler, "action", "pub", "chan", channel, "msg", message, "ack", false);
     }
 
     /**
-     * Publish the given message to the given channel, receiving UUID of published message if publish is successful.
-     * @param channel The name of the channel on which to publish the given message.
-     * @param message The actual content of the message to publish on the given channel.
-     * //@param handler An error handler called if sending fails, or if the ack is not properly received
-     * @return ListenableFuture<Long> Future completed with sequence of message on successful send, error otherwise
+     * Publishes {@code message} to {@code channel} with acknowledgement that the message was actually published.
+     *
+     * @param channel Name of the channel on which to publish the message.
+     * @param message Content of the message to be publish on the given channel.
+     * @return ListenableFuture<Long> Completes with UUID of published message on success.
      */
     public ListenableFuture<UUID> publishWithAck(String channel, String message) {
         return sendJSON(new JSONReaderFunction<UUID>() {
@@ -220,12 +236,12 @@ public class PubSubHandle {
                 UUID uuid = UUID.fromString(json.getString("id"));
                 return uuid;
             }
-        }, true, "action", "pub", "chan", channel, "msg", message, "ack", true);
+        }, true, null, "action", "pub", "chan", channel, "msg", message, "ack", true);
     }
 
     /**
-     * Close the connection for good.
-     * @return ListenableFuture<List<String>> Future completing with list of subscriptions on success, error otherwise
+     * Closes the connection with Cogswell Pub/Sub and unsubscribes from all channels.
+     * @return ListenableFuture<List<String>> Completes with the list of channels that were unsubscribed to on success.
      */
     public ListenableFuture<List<String>> close() {
 
@@ -240,6 +256,14 @@ public class PubSubHandle {
         ListenableFuture<List<String>> closedFuture = Futures.transform(unsubscribeAllFuture, closeFunction);
 
         return closedFuture;
+    }
+
+    /**
+     * Drop the underying socket.  If auto-reconnect is enabled, the underlying socked will be replaced.
+     */
+    protected void dropConnection() {
+        // Force an unplanned closing.
+        socket.onCompleted(new Exception());
     }
 
     /**

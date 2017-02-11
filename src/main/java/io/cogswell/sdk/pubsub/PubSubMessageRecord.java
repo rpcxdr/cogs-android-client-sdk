@@ -5,36 +5,36 @@ import java.util.Calendar;
 import java.util.UUID;
 
 /**
- * This class represents the information that should be passed on when receiving a Pub/Sub message
+ * Represents a Cogswell Pub/Sub message record holding published message content and associated information.
  */
 public class PubSubMessageRecord
 {
     /**
-     * The timestamp of the Pub/Sub message
+     * The timestamp of the message represented by this PubSubMessageRecord.
      */
     private final Calendar timestamp;
 
     /**
-     * The channel to which the Pub/Sub message is published
+     * The channel to which the message represented by this PubSubMessageRecord was published.
      */
     private final String channel;
 
     /**
-     * The actual message stored in the Pub/Sub message to be published
+     * The content of the published message represented by this PubSubMessageRecord.
      */
     private final String message;
 
     /**
-     * The UUID of the Pub/Sub message 
+     * The UUID of the message represented by this PubSubMessageRecord
      */
     private final UUID id;
 
     /**
-     * Constructs the PubSubMessageRecord with the provided information
-     * @param channel The channel to which the Pub/Sub message is meant to be published
-     * @param message The actual message with the Pub/Sub message that should be published
-     * @param timestamp The ISO_INSTANT formatted string representing the time the Pub/Sub message was published
-     * @param id The UUID formatted string representing the UUID of the message to be published
+     * Creates the PubSubMessageRecord filled in with the provided information.
+     * @param channel   Channel to which the message is published.
+     * @param message   Content of the message that is published.
+     * @param timestamp String representing time the message was published, formatted as ISO_INSTANT.
+     * @param id        UUID formatted string representing the UUID of the message to be published.
      * @throws RuntimeException if id is null or timestamp is not parsable.
      */
     public PubSubMessageRecord(String channel, String message, String timestamp, String id) {
@@ -46,7 +46,8 @@ public class PubSubMessageRecord
     }
 
     /**
-     * Returns the channel stored by this PubSubMessageRecord
+     * Returns the channel to which the message represented by this PubSubMessageRecord was published.
+     *
      * @return String
      */
     public String getChannel() { 
@@ -54,7 +55,8 @@ public class PubSubMessageRecord
     }
 
     /**
-     * Returns the message content from the original Pub/Sub message stored by this PubSubMessageRecord
+     * Returns the content of the message represented by this PubSubMessageRecord that was published.
+     *
      * @return String
      */
     public String getMessage() { 
@@ -62,17 +64,18 @@ public class PubSubMessageRecord
     }
 
     /**
-     * Returns the timestamp from the original Pub/Sub message stored by this PubSubMessageRecord
-     * @return java.time.Instant
+     * Returns the timestamp of the message represented by this PubSubMessageRecord.
+     *
+     * @return Calendar
      */
-
     public Calendar getTimestamp() {
         return timestamp; 
     }
 
     /**
-     * Returns the UUID of the original Pub/Sub message stored by this PubSubMessageRecord
-     * @return java.util.UUID 
+     * Returns the UUID of the message represented by this PubSubMessageRecord.
+     *
+     * @return UUID
      */
     public UUID getId() { 
         return id; 

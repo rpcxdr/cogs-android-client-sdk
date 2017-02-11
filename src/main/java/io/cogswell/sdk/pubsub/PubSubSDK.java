@@ -1,29 +1,17 @@
 package io.cogswell.sdk.pubsub;
 
-//import javax.websocket.*;
-
-import android.util.Log;
-
 import com.google.common.base.Function;
-import com.google.common.util.concurrent.AsyncFunction;
-import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.SettableFuture;
 
-//import java.util.concurrent.CompletionException;
-//import java.util.concurrent.CompletableFuture;
-import org.json.JSONObject;
 
 import java.util.List;
 import java.util.concurrent.Executor;
 
-import io.cogswell.sdk.Auth;
-import io.cogswell.sdk.pubsub.PubSubHandle;
-
 /**
- * The main class that all SDK users will use to work with the Pub/Sub SDK. 
+ * All initial connections made to Cogswell Pub/Sub are preformed through this class.
+ * Thereafter, all operations are preformed through an instance of {@link PubSubHandle}
  */
 public class PubSubSDK {
     /**
@@ -51,9 +39,10 @@ public class PubSubSDK {
     }
 
     /**
-     * Creates a connection with the given project keys, and the defaults set for the {@link PubSubOptions}
-     * @param projectKeys The list of requested keys for the connection to be established
-     * @return CompletableFuture<PubSubHandle> future that will contain {@PubSubHandle} used for making SDK requests 
+     * Creates a connection with the given project keys, and defaults set for {@link PubSubOptions}.
+     *
+     * @param projectKeys List of project keys to use for authenticating the connection to establish.
+     * @return CompletableFuture<PubSubHandle> Completes with a {@link PubSubHandle} used to make SDK requests.
      */
     public ListenableFuture<PubSubHandle> connect(List<String> projectKeys) {
         return connect(projectKeys, PubSubOptions.DEFAULT_OPTIONS);
@@ -62,20 +51,21 @@ public class PubSubSDK {
     /**
      * Creates a connection with the given project keys, and the given {@link PubSubOptions}.
      * This will use MoreExecutors.directExecutor() for execution of internal threads.
-     * @param projectKeys The list of requested keys for the connection to be established
-     * @param options The {@link PubSubOptions} to use for the connection to be established
-     * @return CompletableFuture<PubSubHandle> future that will contain {@PubSubHandle} used for making SDK requests 
+     *
+     * @param projectKeys List of project keys to use for authenticating the connection to be establish.
+     * @param options     {@link PubSubOptions} to use for the connection.
+     * @return CompletableFuture<PubSubHandle> Completes with a {@link PubSubHandle} used to make SDK requests.
      */
     public ListenableFuture<PubSubHandle> connect(List<String> projectKeys, PubSubOptions options) {
         return connect(projectKeys, options, MoreExecutors.directExecutor());
     }
 
     /**
-     * Creates a connection with the given project keys, and the given {@link PubSubOptions}
-     * @param projectKeys The list of requested keys for the connection to be established
-     * @param options The {@link PubSubOptions} to use for the connection to be established
+     * Creates a connection with the given project keys, and the given {@link PubSubOptions}.
+     * @param projectKeys List of project keys to use for authenticating the connection to be establish.
+     * @param options     {@link PubSubOptions} to use for the connection.
      * @param executor The executor used for internal threads.
-     * @return CompletableFuture<PubSubHandle> future that will contain {@PubSubHandle} used for making SDK requests
+     * @return CompletableFuture<PubSubHandle> Completes with a {@link PubSubHandle} used to make SDK requests.
      */
     public ListenableFuture<PubSubHandle> connect(List<String> projectKeys, PubSubOptions options, Executor executor) {
         ListenableFuture<PubSubSocket> connectFuture = PubSubSocket.connectSocket(projectKeys, options, executor);

@@ -3,8 +3,8 @@ package io.cogswell.sdk.pubsub;
 import android.util.Log;
 
 import com.google.common.base.Function;
-import com.google.common.base.Throwables;
-import com.google.common.util.concurrent.AsyncFunction;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -19,6 +19,10 @@ import com.koushikdutta.async.http.WebSocket;
 
 import java.util.UUID;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -30,27 +34,19 @@ import java.util.List;
 
 import java.io.IOException;
 
-import java.net.URI;
-
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import io.cogswell.sdk.Auth;
-import io.cogswell.sdk.json.Json;
-import io.cogswell.sdk.json.JsonNode;
 import io.cogswell.sdk.pubsub.exceptions.*;
 import io.cogswell.sdk.pubsub.handlers.*;
-import io.cogswell.sdk.subscription.CogsMessage;
 
 /**
- * PubSubSocket is used to wrap the logic of {@link com.koushikdutta.async.http.WebSocket} websockets.
- * It also servers the purpose of tracking
- * and routing incoming and outgoing message to and from the Pub/Sub server.
+ * Wraps the logic of {@link com.koushikdutta.async.http.WebSocket} websockets.
+ * It also tracks and routes both incoming and outgoing message to and from Cogswell Pub/Sub.
  */
 public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.WebSocketConnectCallback, CompletedCallback
 {
-    private Executor executor;
-
     public static ListenableFuture<PubSubSocket> connectSocket(List<String> projectKeys)
     {
         return connectSocket(projectKeys, PubSubOptions.DEFAULT_OPTIONS, MoreExecutors.directExecutor());
@@ -74,10 +70,40 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
     }
 
     /**
+     * This controls the threading policy for all async tasks.
+     */
+    private Executor executor;
+
+    /**
+     * This manages the keep-alive thread.
+     */
+    private ScheduledExecutorService keepAliveExecutorSerivce;
+
+    /**
+     * This is the keep-alive task, which pings the web-socket.
+     */
+    private Runnable keepAliveRunnable;
+
+    /**
+     * This is the interval at which the keep-alive task is executed.
+     */
+    private long keepAliveIntervalMs;
+
+    /**
+     * This is a reference to the execution of the keep-alive task, used for canceling the task.
+     */
+    private ScheduledFuture keepAliveFuture;
+
+    /**
+     * Handler called when keep-alive pings are sent.  This is protected for testing.
+     */
+    private Runnable keepAliveHandler;
+
+    /**
      * This is the shortest default delay that the socket will wait between reconnects
      * Current it is set to 5 seconds = 5 s * 1000 ms/s = 5000 ms.
      */
-    private static final long DEFAULT_RECONNECT_DELAY = 5000L; // 5 seconds
+    private static final long MIN_RECONNECT_DELAY = 5000L; // 5 seconds
 
     /**
      * This is the longest the socket will wait between reconnects before giving up.
@@ -139,7 +165,17 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
      * Maps each outstanding request to the server by their sequence number 
      * with their associated {@link com.google.common.util.concurrent.ListenableFuture}
      */
-    private Map<Long, SettableFuture<JSONObject>> outstanding;
+    private Cache<Long, SettableFuture<JSONObject>> outstanding;
+
+    /**
+     * Maps outstanding publish request sequence numbers to their server error handlers.
+     */
+    private Cache<Long, PubSubErrorHandler> publishErrorHandlers;
+
+    /**
+     * Maps outstanding publish request sequence numbers to their request objects.
+     */
+    private Cache<Long, JSONObject> publishErrorHandlerRequests;
 
     /**
      * Maps the channel subscriptions of this PubSubSocket with the specific message handlers given for those channels. 
@@ -194,7 +230,7 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
      */
     protected PubSubSocket() {
         this(null, PubSubOptions.DEFAULT_OPTIONS, MoreExecutors.directExecutor());
-        this.autoReconnectDelay = new AtomicLong(DEFAULT_RECONNECT_DELAY);
+        this.autoReconnectDelay = new AtomicLong(MIN_RECONNECT_DELAY);
     }
 
     /**
@@ -220,7 +256,7 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
         this.executor = executor;
 
         this.sessionUuid = options.getSessionUuid();
-        this.autoReconnectDelay = new AtomicLong(options.getConnectTimeout());
+        this.autoReconnectDelay = new AtomicLong(Math.max(options.getConnectTimeout(), MIN_RECONNECT_DELAY));
         this.autoReconnect = new AtomicBoolean(options.getAutoReconnect());
 
         this.isConnected = new AtomicBoolean(false);
@@ -228,7 +264,23 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
         this.setupFuture = null;
 
         this.msgHandlers = Collections.synchronizedMap(new Hashtable<String, PubSubMessageHandler>());
-        this.outstanding = Collections.synchronizedMap(new Hashtable<Long, SettableFuture<JSONObject>>());
+        this.outstanding = CacheBuilder.newBuilder().expireAfterWrite(30, TimeUnit.SECONDS).build();
+        this.publishErrorHandlers = CacheBuilder.newBuilder().expireAfterWrite(30, TimeUnit.SECONDS).build();
+        this.publishErrorHandlerRequests = CacheBuilder.newBuilder().expireAfterWrite(30, TimeUnit.SECONDS).build();
+
+        this.keepAliveExecutorSerivce = Executors.newSingleThreadScheduledExecutor();
+        this.keepAliveRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (PubSubSocket.this.isConnected.get() && webSocketSession !=null && webSocketSession.isOpen() && !webSocketSession.isPaused()) {
+                    if (keepAliveHandler != null) {
+                        keepAliveHandler.run();
+                    }
+                    webSocketSession.ping("");
+                }
+            }
+        };
+        this.keepAliveIntervalMs = 30000;
 
     }
 
@@ -251,13 +303,17 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
      *
      * @return CompletableFuture<JSONObject> future that will contain server response to given request, or the sequence number if we are not waiting on the server.
      */
-    protected ListenableFuture<JSONObject> sendRequest(long sequence, JSONObject json, boolean isAwaitingServerResponse) {
+    protected ListenableFuture<JSONObject> sendRequest(long sequence, JSONObject json, boolean isAwaitingServerResponse, PubSubErrorHandler serverErrorHandler) {
         SettableFuture<JSONObject> result = SettableFuture.create();
 
         try {
             if (isAwaitingServerResponse) {
                 // If we're awaiting a server response, store this sequence number.
                 outstanding.put(sequence, result);
+            }
+            if (serverErrorHandler != null) {
+                publishErrorHandlers.put(sequence, serverErrorHandler);
+                publishErrorHandlerRequests.put(sequence, json);
             }
 
             String jsonString = json.toString();
@@ -298,12 +354,10 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
             headers.add("Payload", ph.payloadBase64);
             headers.add("PayloadHMAC", ph.payloadHmac);
 
-            AsyncHttpRequest httpRequest = new AsyncHttpRequest(options.uri, "GET", headers);
+            AsyncHttpRequest httpRequest = new AsyncHttpRequest(options.getUri(), "GET", headers);
 
             // This calls onCompleted(Exception error, WebSocket webSocket) on when complete:
-            AsyncHttpClient.getDefaultInstance().websocket(httpRequest, "websocket", this);             /*
-            AsyncHttpClient.getDefaultInstance().websocket(httpRequest, "websocket", new AsyncHttpClient.WebSocketConnectCallback() {
-            */
+            AsyncHttpClient.getDefaultInstance().websocket(httpRequest, "websocket", this);
         }
         return setupFuture;
     }
@@ -329,6 +383,17 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
         ListenableFuture<PubSubSocket> reconnectHandlerFuture = Futures.transform(connectFuture, reconnectHandlerFunction, executor);
 
         return reconnectHandlerFuture;
+    }
+
+    private synchronized void startKeepAliveHearbeatPing() {
+        stopKeepAliveHeartbeatPing();
+        keepAliveFuture = keepAliveExecutorSerivce.scheduleAtFixedRate(keepAliveRunnable, keepAliveIntervalMs, keepAliveIntervalMs, TimeUnit.MILLISECONDS);
+    }
+
+    private synchronized void stopKeepAliveHeartbeatPing() {
+        if (keepAliveFuture!=null) {
+            keepAliveFuture.cancel(true);
+        }
     }
 
     ///////////////////// EXTENDING ENDPOINT AND IMPLEMENTING MESSAGE_HANDLER ///////////////////// 
@@ -364,6 +429,7 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
                 //currentHandler().connected();
                 setupFuture.set(PubSubSocket.this);
                 isConnected.set(true);
+                startKeepAliveHearbeatPing();
             } else {
                 // If we are auto-reconnecting, get the uuid, and notify the newSessionHandler if it has changed.
                 ListenableFuture<UUID> getSessionUuidFuture = new PubSubHandle(PubSubSocket.this, -1L).getSessionUuid();
@@ -382,11 +448,13 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
                         }
                         setupFuture.set(PubSubSocket.this);
                         isConnected.set(true);
+                        startKeepAliveHearbeatPing();
                     }
                     public void onFailure(Throwable error) {
                         // This will trigger another reconnect attempt.
                         setupFuture.setException(error);
                         isConnected.set(false);
+                        stopKeepAliveHeartbeatPing();
                     }
                 }, executor);
             }
@@ -411,6 +479,7 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
         long nextDelay;
 
         isConnected.set(false);
+        stopKeepAliveHeartbeatPing();
 
         if(closeHandler != null) {
             closeHandler.onClose(closeReason);
@@ -435,7 +504,8 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
      */
     private void reconnectRetry(final long msUntilNextRetry) {
         Log.d("Cogs-SDK", "Attempting reconnect in "+msUntilNextRetry+"ms.");
-        Utils.setTimeout( new Runnable() {
+        keepAliveExecutorSerivce.schedule(new Runnable()
+        {
             public void run() {
                 try {
                     ListenableFuture<PubSubSocket> connectFuture = reconnect();
@@ -447,7 +517,7 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
 
                         public void onFailure(Throwable error) {
 
-                            long minimumDelay = Math.max(DEFAULT_RECONNECT_DELAY, msUntilNextRetry);
+                            long minimumDelay = Math.max(PubSubSocket.this.autoReconnectDelay.get(), msUntilNextRetry);
                             long nextDelay = Math.min(minimumDelay * 2, MAX_RECONNECT_DELAY);
 
                             // Attempt reconnecting forever.
@@ -458,7 +528,7 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
                     Log.e("Cogs-SDK", "Auth error when reconnecting", ake);
                 }
             }
-        }, msUntilNextRetry);
+        }, msUntilNextRetry, TimeUnit.MILLISECONDS);
     }
     /**
      * Called whenever the connection represented by this PubSubSocket produces errors
@@ -514,18 +584,37 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
                 }
             } else {
                 long seq = json.getLong("seq");
-                SettableFuture<JSONObject> responseFuture = outstanding.get(seq);
+
+                // Resolve a promise if there is a future waiting for a response.
+                SettableFuture<JSONObject> responseFuture = outstanding.getIfPresent(seq);
                 if (responseFuture !=null) {
                     if (json.getInt("code") != 200) {
                         responseFuture.setException(new PubSubException("Received an error from the server:" + message));
                     } else {
                         responseFuture.set(json);
                     }
-                    outstanding.remove(seq);
+                    outstanding.invalidate(seq);
                 } else {
                     // All responses with a seq should have a future waiting for it.
                     Log.w("Cogs-SDK","Recieved a message with a sequence number, but no client handler is listening for it: "+message);
                 }
+
+                // Notify the error handler if the server Resolve a promise if there is a future waiting for a response.
+                PubSubErrorHandler errorHandler = publishErrorHandlers.getIfPresent(seq);
+                if (errorHandler != null) {
+                    JSONObject request = publishErrorHandlerRequests.getIfPresent(seq);
+                    String channel = null;
+                    if (request != null) {
+                        try {
+                            channel = request.getString("chan");
+                        } catch (JSONException e) {
+                            Log.w("Cogs-SDK","Could not get channel name after publish generated a server error.", e);
+                            channel = null;
+                        }
+                    }
+                    errorHandler.onError(new Throwable(message), seq, channel);
+                }
+
             }
         } catch (JSONException e) {
             // This should never happen.  Log it and send to the handler, if specified.
@@ -551,6 +640,15 @@ public class PubSubSocket implements WebSocket.StringCallback, AsyncHttpClient.W
      */
     protected UUID getSessionUuid() {
         return sessionUuid;
+    }
+
+
+    /**
+     * Handler called when keep-alive pings are sent.  This is protected for testing.
+     * @param handler The handler to call
+     */
+    protected void setKeepAliveHandler(Runnable handler) {
+        keepAliveHandler = handler;
     }
 
     /**

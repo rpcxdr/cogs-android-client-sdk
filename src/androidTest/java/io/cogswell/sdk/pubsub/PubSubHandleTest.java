@@ -2,6 +2,7 @@ package io.cogswell.sdk.pubsub;
 
 import android.util.Log;
 
+import com.google.common.base.Function;
 import com.google.common.base.Strings;
 import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.FutureCallback;
@@ -449,6 +450,91 @@ public class PubSubHandleTest extends TestCase {
         assertTrue(responses.get("closeResponse") instanceof List);
         assertEquals(1, ((List<String>)responses.get("closeResponse")).size());
         assertEquals(testChannel, ((List<String>)responses.get("closeResponse")).get(0));
+    }
+
+    public void testRestoreSession() throws Exception {
+        final Map<String,Object> responses = new HashMap<String, Object>();
+
+        final CountDownLatch signal = new CountDownLatch(1);
+
+        final String testChannel = "TEST-CHANNEL";
+        final PubSubMessageHandler messageHandler = new PubSubMessageHandler() {
+            @Override
+            public void onMessage(PubSubMessageRecord record) {
+                responses.put("error", "This should never be called for this test");
+            }
+        };
+
+        // Open a connection, subscribe, then close.
+        ListenableFuture<PubSubHandle> connectFuture = PubSubSDK.getInstance().connect(keys, new PubSubOptions("https://gamqa-api.aviatainc.com/pubsub"));
+
+        AsyncFunction<PubSubHandle, List<String>> subscribeFunction =
+                new AsyncFunction<PubSubHandle, List<String>>() {
+                    public ListenableFuture<List<String>> apply(PubSubHandle pubsubHandle) {
+                        responses.put("pubsubHandle", pubsubHandle);
+                        return pubsubHandle.subscribe(testChannel, messageHandler);
+                    }
+                };
+        ListenableFuture<List<String>> subscribeFuture = Futures.transformAsync(connectFuture, subscribeFunction);
+
+        AsyncFunction<List<String>, UUID> getSessionUuidFunction =
+                new AsyncFunction<List<String>, UUID>() {
+                    public ListenableFuture<UUID> apply(List<String> subscribeResponse) {
+                        responses.put("subscribeResponse", subscribeResponse);
+                        PubSubHandle pubsubHandle = (PubSubHandle) responses.get("pubsubHandle");
+                        return pubsubHandle.getSessionUuid();
+                    }
+                };
+        ListenableFuture<UUID> getSessionUuidFuture = Futures.transformAsync(subscribeFuture, getSessionUuidFunction);
+
+        Function<UUID, List<String>> closeFunction =
+                new Function<UUID, List<String>>() {
+                    public List<String> apply(UUID getSessionUuidResponse) {
+                        responses.put("getSessionUuidResponse", getSessionUuidResponse);
+                        PubSubHandle pubsubHandle = (PubSubHandle) responses.get("pubsubHandle");
+                        pubsubHandle.dropConnection();
+                        return null;
+                    }
+                };
+        ListenableFuture<List<String>> closeFuture = Futures.transform(getSessionUuidFuture, closeFunction);
+
+        AsyncFunction<List<String>, PubSubHandle> reconnectFunction =
+                new AsyncFunction<List<String>, PubSubHandle>() {
+                    public ListenableFuture<PubSubHandle> apply(List<String> subscribeResponse) {
+                        UUID getSessionUuidResponse = (UUID) responses.get("getSessionUuidResponse");
+                        return PubSubSDK.getInstance().connect(keys, new PubSubOptions("https://gamqa-api.aviatainc.com/pubsub", false, 3000L, getSessionUuidResponse));
+                    }
+                };
+        ListenableFuture<PubSubHandle> reconnectFuture = Futures.transformAsync(closeFuture, reconnectFunction);
+
+        AsyncFunction<PubSubHandle, List<String>> listSubscriptionsFunction =
+                new AsyncFunction<PubSubHandle, List<String>>() {
+                    public ListenableFuture<List<String>> apply(PubSubHandle pubsubHandle) {
+                        return pubsubHandle.listSubscriptions();
+                    }
+                };
+        ListenableFuture<List<String>> listSubscriptionsFuture = Futures.transformAsync(reconnectFuture, listSubscriptionsFunction);
+
+
+        Futures.addCallback(listSubscriptionsFuture, new FutureCallback<List<String>>() {
+            public void onSuccess(List<String> listSubscriptionsFuture) {
+                responses.put("listSubscriptionsFuture", listSubscriptionsFuture);
+                signal.countDown();
+            }
+            public void onFailure(Throwable error) {
+                responses.put("listSubscriptionsFuture", error);
+                signal.countDown();
+            }
+        });
+
+        signal.await(asyncTimeoutSeconds, TimeUnit.SECONDS);
+
+        assertNull(responses.get("error"));
+        assertEquals(testChannel, ((List<String>)responses.get("subscribeResponse")).get(0));
+
+        assertTrue(responses.get("listSubscriptionsFuture") instanceof List);
+        assertEquals(1, ((List<String>)responses.get("listSubscriptionsFuture")).size());
+        assertEquals(testChannel, ((List<String>)responses.get("listSubscriptionsFuture")).get(0));
     }
 
 }
